@@ -1,5 +1,6 @@
-import type { NextFunction, Request, Response } from 'express';
-import type { ApiErrorBody, ApiErrorCode } from '@app/shared';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { MulterError } from 'multer';
+import { LIMITS, type ApiErrorBody, type ApiErrorCode } from '@app/shared';
 
 const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   VALIDATION_ERROR: 400,
@@ -38,6 +39,24 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Express 4 does not catch rejected promises, so every async handler goes
+ * through this — without it a thrown ApiError would hang the request.
+ */
+export function wrap(handler: RequestHandler): RequestHandler {
+  return (req, res, next) => {
+    void Promise.resolve(handler(req, res, next)).catch(next);
+  };
+}
+
+function fromMulter(err: MulterError): ApiError {
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    const mb = Math.round(LIMITS.uploadBytes / (1024 * 1024));
+    return new ApiError('INPUT_TOO_LONG', `That file is over the ${mb} MB upload limit.`);
+  }
+  return new ApiError('VALIDATION_ERROR', `Upload rejected: ${err.message}.`);
+}
+
 export function notFoundHandler(req: Request, res: Response): void {
   const err = new ApiError('NOT_FOUND', `No route for ${req.method} ${req.path}`);
   res.status(err.status).json(err.toBody());
@@ -50,9 +69,11 @@ export function errorHandler(
   res: Response,
   _next: NextFunction,
 ): void {
-  if (err instanceof ApiError) {
-    if (err.retryAfter !== undefined) res.setHeader('Retry-After', String(err.retryAfter));
-    res.status(err.status).json(err.toBody());
+  const apiErr = err instanceof MulterError ? fromMulter(err) : err;
+
+  if (apiErr instanceof ApiError) {
+    if (apiErr.retryAfter !== undefined) res.setHeader('Retry-After', String(apiErr.retryAfter));
+    res.status(apiErr.status).json(apiErr.toBody());
     return;
   }
 

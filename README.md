@@ -35,7 +35,20 @@ shared/   DTOs imported by both sides as @app/shared
 
 The database lives at `server/data/app.db` (gitignored) and is migrated on startup.
 
+## Test fixtures
+
+`server/test/fixtures/` holds a small PDF, DOCX and a deliberately fake PDF. They are generated,
+not hand-made binaries — regenerate with:
+
+```bash
+node server/test/fixtures/make-fixtures.mjs
+```
+
 ## Build status
 
-Milestone 1 (skeleton) is done: workspaces, Express + Vite, `/api/health`, DB migrations, `.env`
-check. Milestones 2-6 (resume, evaluate backend, evaluate UI, jobs database, polish) are next.
+- [x] 1 · Skeleton — workspaces, Express + Vite, `/api/health`, DB migrations, `.env` check
+- [x] 2 · Resume — PDF/DOCX/text parsing, save + load default, resume panel UI
+- [ ] 3 · Evaluate backend — Groq client, prompt, scoring, `POST /api/evaluate`
+- [ ] 4 · Evaluate UI
+- [ ] 5 · Jobs database
+- [ ] 6 · Polish

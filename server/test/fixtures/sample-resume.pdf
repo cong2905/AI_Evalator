@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Length 519 >>
+stream
+BT
+/F1 11 Tf
+14 TL
+50 760 Td
+(Jane Doe) Tj T*
+(Frontend Engineer - Lisbon, Portugal) Tj T*
+(jane.doe@example.com) Tj T*
+() Tj T*
+(EXPERIENCE) Tj T*
+(Senior Frontend Engineer, Northwind (2021-present)) Tj T*
+(Built React dashboards used by 12,000 users. TypeScript, Vite, REST APIs.) Tj T*
+(Wrote unit tests and mentored two junior engineers.) Tj T*
+() Tj T*
+(SKILLS) Tj T*
+(TypeScript, JavaScript, React, Node.js, SQL, Git) Tj T*
+() Tj T*
+(EDUCATION) Tj T*
+(B.Sc. Computer Science, University of Lisbon, 2018) Tj T*
+ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+880
+%%EOF
