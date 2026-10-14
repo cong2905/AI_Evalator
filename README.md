@@ -1,200 +1,145 @@
 # AI Job Evaluator
 
-Compare your resume against a job description with an LLM on the Groq API, and keep every
-evaluation in a local jobs database. Runs on your machine — no accounts, no hosting, no cloud
-storage. See [SPEC.md](SPEC.md) for the full build spec.
+Find out how well your resume matches a job before you apply. Paste a job description, and the
+app reads it next to your resume and goes through it requirement by requirement: what the job asks
+for, how much it matters, what you have that covers it, and what's missing. It ends with a match
+percentage and a list of keywords to think about adding.
 
-- **Evaluate** — upload or paste your resume, paste a job description, get a requirement-by-requirement
-  comparison and a match percentage.
-- **Jobs database** — every evaluation is saved, searchable, and openable in a detail popup.
+Every evaluation is saved, so you build up a list of the jobs you've checked and can compare them
+later.
 
-## Setup
+## User guide
 
-Needs **Node 20 or newer**.
+### 1. Add your resume
 
-```bash
-npm install
-cp .env.example server/.env
-```
+- **Upload** a PDF or Word (`.docx`) file up to 5 MB, or **paste** the text.
+- The text from your upload is shown so you can check it before you go on. A scanned PDF has no
+  real text in it. If the app says "No text found", paste your resume instead.
+- Leave **Save as my default resume** ticked and your resume will be filled in for you next time.
 
-Open `server/.env` and paste your key from [console.groq.com/keys](https://console.groq.com/keys):
+Just looking around? Press **Try with sample data** to fill in a made-up resume and job.
 
-```
-GROQ_API_KEY=gsk_your_key_here
-GROQ_MODEL=openai/gpt-oss-120b
-PORT=3001
-```
+### 2. Describe the job
 
-Then:
+Fill in the **job name**, the **company**, and paste the full **job description**. The **Evaluate**
+button turns on once every field is filled in and within its length limit.
 
-```bash
-npm run dev
-```
+### 3. Read the result
 
-- App: **http://localhost:5173**
-- API: http://127.0.0.1:3001 (loopback only)
+An evaluation usually takes a few seconds. You get:
 
-The server refuses to start with a blank `GROQ_API_KEY` and prints what to fix.
+- **Match score**: a percentage based on how many of the job's requirements you meet.
+- **Summary**: a short plain-language overview.
+- **Comparison table**: one row per requirement:
 
-## Using it
+  | Column | Meaning |
+  |---|---|
+  | What they ask | A requirement taken from the job description |
+  | Importance | **Must-have** or **nice-to-have** |
+  | What you have | The part of your resume that covers it, if any |
+  | Status | **Met**, **Partial**, or **Missing** |
 
-1. **Resume** — upload a PDF or DOCX, or paste the text. The upload is parsed and shown so you can
-   check it before saving. "Save as my default resume" is on by default, so the resume is stored
-   when you press Evaluate and reloaded automatically next time.
-2. **Job** — fill in job name, company, and paste the job description. Evaluate stays disabled until
-   everything is within its limits.
-3. **Result** — a score, a short summary, the comparison table (what they ask · importance · what you
-   have · status), and the keywords missing from your resume. The evaluation is saved automatically.
-4. **Jobs database** — search by job or company, press **View details** for the full table, and
-   delete anything you no longer want.
+- **Missing keywords**: words from the job description that your resume doesn't use.
+
+#### How the score is calculated
+
+A must-have requirement counts twice as much as a nice-to-have. A met requirement gets full
+credit, a partial one gets half, and a missing one gets nothing. So two people can meet the same
+number of requirements and still get different scores, depending on which ones they meet.
+
+### 4. Look through your saved jobs
+
+Open **Jobs** to see every evaluation, newest first.
+
+- **Search** by job name or company.
+- **View details** opens the full comparison table again.
+- **Delete** removes one evaluation for good.
+
+### Using it on another device
+
+Your data is tied to the browser you use, and there's no account or password. To see the same
+jobs on your phone or another browser:
+
+1. On the device that has your data, press **Get a code**.
+2. On the other device, type the code under **Have a code?** and press **Use code**.
+
+A code works once and expires after **10 minutes**. Any evaluations already on the second device
+are hidden once you use a code there.
+
+**Delete everything** removes every evaluation and resume stored for this device.
 
 ### Limits
-
-Chosen to fit the Groq free plan's 8,000 tokens/minute, which works out to roughly one evaluation
-per minute. Going over returns a clear "cut N characters" message rather than failing at the API.
 
 | Field | Limit |
 |---|---|
 | Resume text | 200 – 10,000 characters |
 | Job description | 50 – 8,000 characters |
 | Job name / company | 1 – 120 characters |
-| Upload size | 5 MB, `.pdf` or `.docx` |
+| Upload | 5 MB, `.pdf` or `.docx` |
+| Evaluations | 5 per person per day on the public site |
 
-If you hit the rate limit, the Evaluate button shows a countdown and re-enables itself — short waits
-are retried automatically by the server.
+If a field is too long, the app tells you how many characters to cut. If the AI service is busy,
+the **Evaluate** button shows a countdown and turns back on when it's done. You don't have to do
+anything.
 
-## Scripts
+### Your privacy
 
-| Command | What it does |
+- Your resume is sent to the AI service only when you press **Evaluate**, and only for that one
+  evaluation.
+- Your resume text is never written to the server logs.
+- On the public site, your data is deleted after **7 days without a visit**. Each visit resets
+  the timer.
+- You can delete one job, or everything, whenever you like.
+
+### Common problems
+
+| What you see | What to do |
 |---|---|
-| `npm run dev` | Express (tsx watch) + Vite together; Vite proxies `/api` to the API |
-| `npm test` | Server tests + client component tests (vitest). No test calls the real Groq API. |
-| `npm run typecheck` | `tsc --noEmit` across all three workspaces |
-| `npm run build` | Typechecks the server, builds the client bundle |
+| "No text found in that PDF" | The PDF is probably a scan. Paste the text instead |
+| "Cut N characters" | Shorten that field by the amount shown |
+| A countdown on the Evaluate button | The AI service is busy. Wait and it turns back on |
+| Daily limit reached | The limit resets at midnight UTC |
+| Your jobs are gone on a new browser | Use **Get a code** to move them across |
 
-## API
+## Tech stack
 
-| Method | Path | Purpose |
+| Layer | Technology | Why |
 |---|---|---|
-| GET | `/api/health` | Server, model and database check |
-| GET | `/api/resume/default` | The saved default resume, or 404 |
-| POST | `/api/resume` | Save a resume (multipart file, or JSON `{ text }`) |
-| POST | `/api/resume/parse` | Parse an upload to text without saving it |
-| POST | `/api/evaluate` | Run an evaluation and save it |
-| GET | `/api/jobs?q=` | Saved jobs, newest first, optionally filtered |
-| GET | `/api/jobs/:id` | One evaluation in full |
-| DELETE | `/api/jobs/:id` | Delete an evaluation and its rows |
+| Frontend | **React 18**, **TypeScript**, **Vite**, CSS Modules | Fast, typed UI. CSS Modules keep each component's styles separate |
+| Routing | **React Router** | Switches between the Evaluate and Jobs pages without reloading |
+| Backend | **Node.js** + **Express** | A small API that handles uploads, evaluations, and saved jobs |
+| AI model | **Groq API** running `openai/gpt-oss-120b` | Very fast responses, which keeps an evaluation down to a few seconds |
+| Database | **SQLite** via `better-sqlite3` | A single file with no separate database server |
+| File parsing | **pdf-parse**, **mammoth** | Pull the text out of PDF and Word files |
+| Validation | **Zod** | Checks every request and every AI response before it's used |
+| Protection | **express-rate-limit**, signed cookies | Limits per IP address, per visitor, and for the whole site |
+| Testing | **Vitest** | Server and component tests. The tests never call the real AI service |
+| Hosting | **Docker** on **Fly.io** | One container that serves both the website and the API |
 
-Errors always come back as `{ "error": { "code", "message", "retryAfter?" } }`.
-
-## Layout
+### How it works
 
 ```
-client/   React 18 + Vite — pages, components, api.ts
-server/   Express, SQLite (better-sqlite3), Groq integration
-shared/   DTOs both sides import as @app/shared
+ Browser (React)                Server (Express)                  Groq
+ ───────────────                ────────────────                  ────
+ resume + job  ──── POST ────▶  check lengths & limits
+                                build prompt  ─────────────────▶  model reads both,
+                                                                  returns JSON
+                                check JSON with Zod  ◀──────────
+                                calculate score (in code, not by the model)
+                                save to SQLite
+ result table  ◀─── JSON ─────
 ```
 
-The database is a single file at `server/data/app.db`, created and migrated on startup. It is
-gitignored, along with `server/.env`.
+- **The AI compares, the code scores.** The model only judges each requirement as met, partial, or
+  missing. The percentage is calculated by the server, so the same judgements always give the
+  same score.
+- **Structured output.** The model has to answer in a fixed JSON shape. If the answer doesn't
+  match, the request is retried before you'd ever see an error.
+- **Sessions without accounts.** Each browser gets a signed cookie that links it to its own data.
+  A transfer code links a second browser to the same data.
+- **Shared types.** Request and response types are defined once
+  (`shared/`) and used by both, so the two sides can't fall out of step.
 
-### Test fixtures
+---
 
-`server/test/fixtures/` holds a small PDF, a DOCX and a deliberately fake PDF. They are generated,
-not hand-made binaries — regenerate with:
-
-```bash
-node server/test/fixtures/make-fixtures.mjs
-```
-
-## Privacy
-
-Your resume stays on your machine, in `server/data/app.db`. It is sent to Groq only as part of an
-evaluation you ask for. On the public demo, a visitor's data is kept while they keep using the app
-and deleted after **7 days without a visit** — the session cookie rolls forward on each visit, so
-the cookie never expires while the data behind it is still alive. The API key lives only in `server/.env`, is never bundled into the client,
-and is never logged. Resume text is never written to the logs either — only the model name, token
-usage and latency of each call.
-
-## Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| `Invalid server environment … GROQ_API_KEY` | `server/.env` is missing or the key is blank |
-| `Groq rejected the API key in server/.env` | The key is wrong or revoked — make a new one |
-| "Groq is busy, try again in Ns" | Free-plan rate limit; the countdown finishes on its own |
-| "No text found in that PDF" | It is probably a scan — paste the text instead |
-| Port 3001 or 5173 already in use | Stop the other process, or change `PORT` in `server/.env` |
-
-## Deploying
-
-The app ships as one container: Express serves both the API and the built client on a single port.
-It needs a **persistent disk** for the SQLite file, which rules out Vercel and Netlify, and makes
-Render's free tier a poor fit (no disk, plus ~50s cold starts). These steps use Fly.io.
-
-**Install flyctl first** — it is a separate program, not an npm package. In PowerShell:
-
-```powershell
-iwr https://fly.io/install.ps1 -useb | iex
-```
-
-It lands in `%USERPROFILE%\.fly\bin` and is added to your PATH. **Open a new terminal afterwards**,
-or the `fly` command will still not be found in the one you already had open.
-
-Then, in PowerShell from the project root:
-
-```powershell
-fly auth login                  # opens a browser; a card on file is required even on the free tier
-
-fly launch --no-deploy          # answer NO to deploying now - the secrets are not set yet
-
-fly volumes create ai_evaluator_data --size 1
-
-fly secrets set GROQ_API_KEY="gsk_your_key_here"
-
-# Generate the session secret, then paste it into the next command.
-node -e "console.log(crypto.randomUUID()+crypto.randomUUID())"
-fly secrets set SESSION_SECRET="paste_the_value_here"
-
-fly deploy
-
-fly open                        # opens the live URL
-fly logs                        # startup lines: database ready / serving client / listening
-```
-
-In Git Bash the secret can be generated inline instead:
-
-```bash
-fly secrets set SESSION_SECRET="$(node -e 'console.log(crypto.randomUUID()+crypto.randomUUID())')"
-```
-
-### Two constraints that will bite if ignored
-
-1. **Never rotate `SESSION_SECRET` casually.** Every visitor cookie is signed with it. Changing it
-   invalidates all of them at once: every session resets and every saved row is orphaned. Set it
-   once, never generate it in a build step.
-2. **Stay on a single machine.** The SQLite file lives on one volume attached to one machine. A
-   second machine gets its own empty volume and would serve an empty app to anyone routed there.
-   `fly scale count 1` is the only safe setting until the database moves to Postgres or Turso.
-
-### Testing the production build locally
-
-```bash
-npm run build -w client
-NODE_ENV=production PORT=3100 DB_PATH=./tmp.db npx tsx server/src/index.ts
-```
-
-Note that `NODE_ENV=production` marks the session cookie `Secure`, so a browser will refuse to
-store it over plain `http://localhost`. The pages and the API work; sessions will not persist until
-it is behind HTTPS. That is correct behaviour, not a bug.
-
-## Build status
-
-All six milestones from SPEC.md are complete.
-
-- [x] 1 · Skeleton — workspaces, Express + Vite, `/api/health`, DB migrations, `.env` check
-- [x] 2 · Resume — PDF/DOCX/text parsing, save + load default, resume panel UI
-- [x] 3 · Evaluate backend — Groq client with retries, prompt, scoring, `POST /api/evaluate`
-- [x] 4 · Evaluate UI — job form, loading / error / rate-limit states, result table
-- [x] 5 · Jobs database — list, search, detail modal, delete
-- [x] 6 · Polish — empty states, responsive pass, this README
+Running, testing, or deploying the app yourself? See [DEVELOPMENT.md](DEVELOPMENT.md).
