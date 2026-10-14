@@ -5,69 +5,78 @@
 }
 
 .heading {
-  font-size: 1.15rem;
+  font-size: var(--text-lg);
   margin: 0;
 }
 
 .statusLine {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-sm);
   color: var(--text-muted);
   min-height: 1.3em;
 }
 
 .error {
-  color: var(--missing);
+  color: var(--missing-text);
 }
 
 .label {
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--text-md);
   display: block;
   margin-bottom: 0.35rem;
+  color: var(--heading);
 }
 
 .dropzone {
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  background: #fafbfc;
-  padding: 0.9rem;
+  border: 1.5px dashed var(--card-border);
+  border-radius: var(--radius-input);
+  background: var(--surface-soft);
+  padding: 0.95rem;
 }
 
 .dropzone input[type='file'] {
   max-width: 100%;
-  font-size: 14px;
+  font-size: var(--text-md);
+  color: var(--text);
 }
 
 .textarea {
   width: 100%;
-  min-height: 300px;
+  min-height: 420px;
   resize: vertical;
-  padding: 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 1.5;
-  background: #fff;
+  padding: 0.75rem;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-input);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  line-height: 1.6;
+  background: var(--input-bg);
   color: var(--text);
 }
 
+.textarea:focus {
+  outline: none;
+  border-color: var(--ocean);
+  box-shadow: var(--focus-ring);
+}
+
 .textarea:disabled {
-  background: #f7f8fa;
+  background: var(--surface-soft);
   color: var(--text-muted);
 }
 
 .counter {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
   text-align: right;
+  margin-top: 0.3rem;
 }
 
 .counterBad {
-  color: var(--missing);
-  font-weight: 500;
+  color: var(--missing-text);
+  font-weight: 600;
 }
 
 .footer {
@@ -76,7 +85,7 @@
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--divider);
   padding-top: 0.9rem;
   margin-top: 0.25rem;
 }
@@ -85,32 +94,41 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 14px;
+  font-size: var(--text-md);
   cursor: pointer;
 }
 
 .checkbox input {
   width: 18px;
   height: 18px;
-  accent-color: var(--accent);
+  accent-color: var(--ocean);
   cursor: pointer;
 }
 
 .saveButton {
-  background: var(--accent);
+  background: var(--ocean);
   color: #fff;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
+  border: none;
+  border-bottom: 3px solid var(--ocean-dark);
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1.2rem;
   font-weight: 600;
   cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
 }
 
 .saveButton:hover:not(:disabled) {
-  background: #1d47a6;
+  background: var(--ocean-dark);
+  transform: translateY(-1px);
+}
+
+.saveButton:active:not(:disabled) {
+  transform: translateY(1px);
+  border-bottom-width: 2px;
 }
 
 .saveButton:disabled {
-  background: #aab4c4;
+  background: var(--disabled-bg);
+  border-bottom-color: var(--card-border);
   cursor: not-allowed;
 }

@@ -1,0 +1,82 @@
+/* The box scrolls, never the page (responsive down to 375px). */
+.scroller {
+  overflow-x: auto;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-card);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: var(--text-md);
+}
+
+.table th {
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.7rem 0.95rem;
+  border-bottom: 1px solid var(--divider);
+  white-space: nowrap;
+}
+
+/* Dashed separators read like faint ripples rather than table rules. */
+.table td {
+  padding: 0.75rem 0.95rem;
+  border-bottom: 1px dashed var(--divider);
+  vertical-align: top;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.requirement {
+  font-weight: 600;
+  min-width: 170px;
+}
+
+.importance {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.evidence {
+  color: var(--text-muted);
+  min-width: 200px;
+}
+
+.hasEvidence {
+  color: var(--text);
+}
+
+.statusCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* `backwards` holds the start frame during the stagger delay; without an
+     animation the rows are simply visible, so nothing depends on JS. */
+  .row {
+    animation: rowIn 0.45s ease-out backwards;
+  }
+
+  @keyframes rowIn {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

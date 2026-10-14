@@ -7,6 +7,7 @@ type ResumeRow = {
   content: string;
   is_default: number;
   updated_at: string;
+  session_id: string | null;
 };
 
 function toResume(row: ResumeRow): Resume {
@@ -19,15 +20,22 @@ function toResume(row: ResumeRow): Resume {
   };
 }
 
-export function getDefaultResume(db: Db): Resume | undefined {
+export function getDefaultResume(db: Db, sessionId: string): Resume | undefined {
   const row = db
-    .prepare('SELECT * FROM resumes WHERE is_default = 1 ORDER BY updated_at DESC LIMIT 1')
-    .get() as ResumeRow | undefined;
+    .prepare(
+      `SELECT * FROM resumes
+       WHERE is_default = 1 AND session_id = ?
+       ORDER BY updated_at DESC LIMIT 1`,
+    )
+    .get(sessionId) as ResumeRow | undefined;
   return row ? toResume(row) : undefined;
 }
 
-export function getResumeById(db: Db, id: number): Resume | undefined {
-  const row = db.prepare('SELECT * FROM resumes WHERE id = ?').get(id) as ResumeRow | undefined;
+/** Scoped, so one visitor cannot evaluate against another visitor's resume id. */
+export function getResumeById(db: Db, sessionId: string, id: number): Resume | undefined {
+  const row = db
+    .prepare('SELECT * FROM resumes WHERE id = ? AND session_id = ?')
+    .get(id, sessionId) as ResumeRow | undefined;
   return row ? toResume(row) : undefined;
 }
 
@@ -35,6 +43,7 @@ export type NewResume = {
   label: string;
   content: string;
   setDefault: boolean;
+  sessionId: string;
 };
 
 /**
@@ -47,11 +56,15 @@ export function insertResume(db: Db, input: NewResume): Resume {
 
   const run = db.transaction((): number => {
     if (input.setDefault) {
-      db.prepare('UPDATE resumes SET is_default = 0').run();
+      // Only this visitor's default is cleared — never everyone's.
+      db.prepare('UPDATE resumes SET is_default = 0 WHERE session_id = ?').run(input.sessionId);
     }
     const info = db
-      .prepare('INSERT INTO resumes (label, content, is_default, updated_at) VALUES (?, ?, ?, ?)')
-      .run(input.label, input.content, input.setDefault ? 1 : 0, updatedAt);
+      .prepare(
+        `INSERT INTO resumes (label, content, is_default, updated_at, session_id)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .run(input.label, input.content, input.setDefault ? 1 : 0, updatedAt, input.sessionId);
     return Number(info.lastInsertRowid);
   });
 
@@ -65,7 +78,11 @@ export function insertResume(db: Db, input: NewResume): Resume {
   };
 }
 
-export function countResumes(db: Db): number {
-  const row = db.prepare('SELECT COUNT(*) AS n FROM resumes').get() as { n: number };
+export function countResumes(db: Db, sessionId?: string): number {
+  const row = (
+    sessionId === undefined
+      ? db.prepare('SELECT COUNT(*) AS n FROM resumes').get()
+      : db.prepare('SELECT COUNT(*) AS n FROM resumes WHERE session_id = ?').get(sessionId)
+  ) as { n: number };
   return row.n;
 }

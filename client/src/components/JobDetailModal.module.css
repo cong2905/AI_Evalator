@@ -1,0 +1,228 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--backdrop);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+  z-index: 50;
+}
+
+.dialog {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-card);
+  width: min(820px, 100%);
+  max-height: min(88vh, 900px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-modal);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.15rem 1.35rem 0.8rem;
+  border-bottom: 1px solid var(--divider);
+}
+
+.title {
+  font-size: var(--text-lg);
+  margin: 0;
+}
+
+.meta {
+  margin: 0.25rem 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.closeIcon {
+  background: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-lg);
+  line-height: 1;
+  padding: 0.1rem 0.6rem 0.25rem;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.closeIcon:hover {
+  background: var(--tab-hover-bg);
+  color: var(--heading);
+}
+
+.body {
+  padding: 1.15rem 1.35rem;
+  overflow-y: auto;
+}
+
+.scoreRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.summary {
+  margin: 0;
+  font-size: var(--text-md);
+  flex: 1;
+  min-width: 240px;
+  max-width: 60ch;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.error {
+  background: var(--missing-bg);
+  border: 1.5px solid var(--card-border);
+  color: var(--missing-text);
+  border-radius: var(--radius-input);
+  padding: 0.7rem 0.85rem;
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+.keywords {
+  margin-top: 1rem;
+}
+
+.keywordsHeading {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 0.45rem;
+  font-family: var(--font-body);
+}
+
+.chips {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+}
+
+.chip {
+  background: var(--surface-soft);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  padding: 0.15rem 0.75rem;
+  font-size: var(--text-sm);
+}
+
+.jdBlock {
+  margin-top: 1rem;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-input);
+  background: var(--surface-soft);
+  padding: 0.65rem 0.85rem;
+}
+
+.jdSummary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: var(--text-md);
+  color: var(--heading);
+}
+
+.jdText {
+  margin: 0.7rem 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.9rem 1.35rem;
+  border-top: 1px solid var(--divider);
+}
+
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.confirmText {
+  font-size: var(--text-md);
+}
+
+.secondaryButton {
+  background: #fff;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1.1rem;
+  font-weight: 600;
+  font-size: var(--text-md);
+  color: var(--ocean);
+  cursor: pointer;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: var(--ocean);
+  background: var(--surface-soft);
+}
+
+.dangerOutline {
+  background: #fff;
+  border: 1.5px solid var(--missing-bg);
+  color: var(--missing-text);
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1.1rem;
+  font-weight: 600;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.dangerOutline:hover:not(:disabled) {
+  background: var(--missing-bg);
+}
+
+.dangerButton {
+  background: var(--missing-text);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1.1rem;
+  font-weight: 600;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.dangerButton:disabled,
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 560px) {
+  .backdrop {
+    padding: 0.5rem;
+  }
+
+  .dialog {
+    max-height: 94vh;
+  }
+}

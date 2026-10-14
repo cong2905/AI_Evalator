@@ -1,0 +1,190 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.heading {
+  font-size: var(--text-lg);
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+
+@media (max-width: 560px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.label {
+  font-weight: 600;
+  font-size: var(--text-md);
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--heading);
+}
+
+.input,
+.textarea {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-input);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: var(--text-md);
+  font-family: var(--font-body);
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--ocean);
+  box-shadow: var(--focus-ring);
+}
+
+.textarea {
+  min-height: 420px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.input:disabled,
+.textarea:disabled {
+  background: var(--surface-soft);
+  color: var(--text-muted);
+}
+
+.counter {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  margin-top: 0.3rem;
+}
+
+.counterBad {
+  color: var(--missing-text);
+  font-weight: 600;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.hint {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.evaluateButton {
+  position: relative;
+  overflow: hidden;
+  background: var(--ocean);
+  color: #fff;
+  border: none;
+  border-bottom: 3px solid var(--ocean-dark);
+  border-radius: var(--radius-pill);
+  padding: 0.7rem 1.6rem;
+  font-size: var(--text-base);
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.evaluateButton:hover:not(:disabled) {
+  background: var(--ocean-dark);
+  transform: translateY(-1px);
+}
+
+.evaluateButton:active:not(:disabled) {
+  transform: translateY(1px);
+  border-bottom-width: 2px;
+}
+
+.evaluateButton:disabled {
+  background: var(--disabled-bg);
+  border-bottom-color: var(--card-border);
+  cursor: not-allowed;
+}
+
+/* A wave of light sweeping the button while Groq is working. */
+.shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(255, 255, 255, 0.38) 50%,
+    transparent 80%
+  );
+  transform: translateX(-100%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shimmer::after {
+    animation: sweep 1.6s ease-in-out infinite;
+  }
+
+  @keyframes sweep {
+    to {
+      transform: translateX(100%);
+    }
+  }
+}
+
+.error {
+  background: var(--missing-bg);
+  border: 1.5px solid var(--card-border);
+  color: var(--missing-text);
+  border-radius: var(--radius-input);
+  padding: 0.7rem 0.85rem;
+  font-size: var(--text-md);
+  margin: 0;
+}
+
+.countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.headingRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.sampleButton {
+  background: #fff;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  padding: 0.35rem 0.9rem;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--ocean);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sampleButton:hover:not(:disabled) {
+  border-color: var(--ocean);
+  background: var(--surface-soft);
+}
+
+.sampleButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

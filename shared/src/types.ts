@@ -53,6 +53,13 @@ export type EvaluateRequest = {
   resumeId?: number;
 };
 
+/** `POST /api/session/transfer-code` — moves a session to another device. */
+export type TransferCodeResponse = {
+  code: string;
+  /** ISO 8601; the code stops working at this moment. */
+  expiresAt: string;
+};
+
 export type HealthResponse = {
   status: 'ok';
   model: string;

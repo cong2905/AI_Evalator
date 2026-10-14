@@ -1,0 +1,55 @@
+/*
+ * Sits at the bottom of the viewport on short pages because .shell is a flex
+ * column with .main { flex: 1 }, and flows after the content on long ones.
+ */
+.banner {
+  position: relative;
+  z-index: 1;
+  background: var(--header-bg);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-top: 1px solid var(--header-border);
+  padding: 1.5rem 1.5rem 1.75rem;
+  margin-top: 2.5rem;
+}
+
+/* Same masked wave as the cards, flipped to ride the top edge. Decorative, and
+   a pseudo-element never reaches the accessibility tree. */
+.banner::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -13px;
+  height: 14px;
+  background: var(--wave);
+  pointer-events: none;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 14' preserveAspectRatio='none'%3E%3Cpath d='M0 7 Q 15 13 30 7 T 60 7 T 90 7 T 120 7 V0 H0 Z' fill='%23000'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 14' preserveAspectRatio='none'%3E%3Cpath d='M0 7 Q 15 13 30 7 T 60 7 T 90 7 T 120 7 V0 H0 Z' fill='%23000'/%3E%3C/svg%3E");
+  -webkit-mask-size: 120px 14px;
+  mask-size: 120px 14px;
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+}
+
+.line {
+  margin: 0;
+  text-align: center;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.name {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.sep {
+  color: var(--card-border);
+}

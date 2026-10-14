@@ -30,8 +30,8 @@ const singleFile = upload.single("file");
 
 export const resumeRouter: Router = Router();
 
-resumeRouter.get("/resume/default", (_req, res) => {
-  const resume = getDefaultResume(getDb());
+resumeRouter.get("/resume/default", (req, res) => {
+  const resume = getDefaultResume(getDb(), req.sessionId);
   if (!resume) {
     throw new ApiError("NOT_FOUND", "No default resume saved yet.");
   }
@@ -97,6 +97,7 @@ resumeRouter.post(
       label: label.slice(0, 200),
       content,
       setDefault: body.setDefault,
+      sessionId: req.sessionId,
     });
 
     console.log(

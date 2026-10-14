@@ -1,0 +1,193 @@
+.card {
+  background: var(--card-bg);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 1.35rem 1.6rem 1.5rem;
+}
+
+.heading {
+  font-size: var(--text-lg);
+  margin: 0 0 0.3rem;
+}
+
+.retention {
+  margin: 0 0 1rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  max-width: 78ch;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  border-top: 1px solid var(--divider);
+  padding-top: 1rem;
+}
+
+.subheading {
+  font-size: var(--text-md);
+  margin: 0 0 0.4rem;
+}
+
+.help,
+.warn {
+  margin: 0 0 0.6rem;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.warn {
+  color: var(--partial-text);
+  background: var(--partial-bg);
+  border-radius: var(--radius-input);
+  padding: 0.5rem 0.7rem;
+}
+
+.countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.code {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: var(--text-xl);
+  letter-spacing: 0.08em;
+  color: var(--ocean);
+  background: var(--score-bg);
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-input);
+  padding: 0.5rem 0.9rem;
+  margin: 0 0 0.6rem;
+  text-align: center;
+  user-select: all;
+}
+
+.adoptRow {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.input {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 0.5rem 0.7rem;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-input);
+  background: var(--input-bg);
+  color: var(--text);
+  font-size: var(--text-md);
+  font-family: var(--font-body);
+  text-transform: uppercase;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--ocean);
+  box-shadow: var(--focus-ring);
+}
+
+.confirm {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.7rem;
+  font-size: var(--text-sm);
+}
+
+.footer {
+  border-top: 1px solid var(--divider);
+  margin-top: 1rem;
+  padding-top: 0.9rem;
+}
+
+.secondaryButton {
+  background: #fff;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1.1rem;
+  font-weight: 600;
+  font-size: var(--text-md);
+  color: var(--ocean);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: var(--ocean);
+  background: var(--surface-soft);
+}
+
+.secondaryButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dangerOutline {
+  background: #fff;
+  border: 1.5px solid var(--missing-bg);
+  color: var(--missing-text);
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1.1rem;
+  font-weight: 600;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.dangerOutline:hover {
+  background: var(--missing-bg);
+}
+
+.dangerButton {
+  background: var(--missing-text);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 0.5rem 1.1rem;
+  font-weight: 600;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+
+.dangerButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  background: var(--missing-bg);
+  border: 1.5px solid var(--card-border);
+  color: var(--missing-text);
+  border-radius: var(--radius-input);
+  padding: 0.6rem 0.8rem;
+  font-size: var(--text-sm);
+  margin: 0 0 0.8rem;
+}
+
+.notice {
+  background: var(--met-bg);
+  border: 1.5px solid var(--card-border);
+  color: var(--met-text);
+  border-radius: var(--radius-input);
+  padding: 0.6rem 0.8rem;
+  font-size: var(--text-sm);
+  margin: 0 0 0.8rem;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

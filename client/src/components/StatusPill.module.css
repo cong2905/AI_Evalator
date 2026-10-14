@@ -1,0 +1,28 @@
+/*
+ * Tinted pills. Every text/tint pair clears WCAG AA (5.1:1 or better), and the
+ * word is always rendered, so status never depends on colour alone.
+ */
+.pill {
+  display: inline-block;
+  padding: 0.18rem 0.7rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.met {
+  background: var(--met-bg);
+  color: var(--met-text);
+}
+
+.partial {
+  background: var(--partial-bg);
+  color: var(--partial-text);
+}
+
+.missing {
+  background: var(--missing-bg);
+  color: var(--missing-text);
+}

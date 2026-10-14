@@ -17,6 +17,21 @@ export type SaveResumeBody = z.infer<typeof saveResumeBodySchema>;
 
 export const idParamSchema = z.coerce.number().int().positive();
 
+/**
+ * Shape only — the character limits are enforced by assertLength so that
+ * over-length inputs get a 413 instead of a 400.
+ */
+export const evaluateBodySchema = z
+  .object({
+    jobName: z.string(),
+    company: z.string(),
+    jdText: z.string(),
+    resumeText: z.string().optional(),
+    resumeId: z.number().int().positive().optional(),
+  })
+  .strict();
+export type EvaluateBody = z.infer<typeof evaluateBodySchema>;
+
 /** Turns a zod failure into the API's VALIDATION_ERROR shape. */
 export function parseOrThrow<S extends z.ZodTypeAny>(schema: S, value: unknown): z.infer<S> {
   const result = schema.safeParse(value);

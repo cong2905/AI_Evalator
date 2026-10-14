@@ -6,10 +6,15 @@ import styles from './ResumePanel.module.css';
 type Props = {
   text: string;
   onTextChange: (text: string) => void;
+  /** The file name to save under, or null before anything is loaded. */
+  label: string | null;
+  onLabelChange: (label: string) => void;
   saveAsDefault: boolean;
   onSaveAsDefaultChange: (value: boolean) => void;
   /** Fires after a successful save so the evaluate step can reuse the saved row. */
   onSaved?: (resume: Resume) => void;
+  /** True while an evaluation is running, which locks the whole panel. */
+  disabled?: boolean;
 };
 
 type Busy = 'idle' | 'loading' | 'parsing' | 'saving';
@@ -27,15 +32,16 @@ function formatSavedAt(iso: string): string {
 export function ResumePanel({
   text,
   onTextChange,
+  label,
+  onLabelChange,
   saveAsDefault,
   onSaveAsDefaultChange,
   onSaved,
+  disabled = false,
 }: Props) {
   const [busy, setBusy] = useState<Busy>('loading');
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
-  /** Label for the next save: the uploaded file name, or 'Pasted resume'. */
-  const [label, setLabel] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadId = useId();
@@ -50,7 +56,7 @@ export function ResumePanel({
         if (cancelled) return;
         if (resume) {
           onTextChange(resume.content);
-          setLabel(resume.label);
+          onLabelChange(resume.label);
           setStatus(`Default loaded: ${resume.label} · saved ${formatSavedAt(resume.updatedAt)}`);
         } else {
           setStatus('No default resume saved yet — upload or paste one below.');
@@ -78,7 +84,7 @@ export function ResumePanel({
     try {
       const parsed = await api.parseResumeFile(file);
       onTextChange(parsed);
-      setLabel(file.name);
+      onLabelChange(file.name);
       setStatus(`Read ${file.name} — check the text below, then save.`);
     } catch (err) {
       setStatus(null);
@@ -100,7 +106,7 @@ export function ResumePanel({
         label: label ?? undefined,
         setDefault: saveAsDefault,
       });
-      setLabel(saved.label);
+      onLabelChange(saved.label);
       setStatus(
         saved.isDefault
           ? `Saved as your default resume: ${saved.label} · ${formatSavedAt(saved.updatedAt)}`
@@ -117,7 +123,8 @@ export function ResumePanel({
   const trimmed = text.trim().length;
   const tooShort = trimmed > 0 && trimmed < LIMITS.resumeText.min;
   const tooLong = trimmed > LIMITS.resumeText.max;
-  const canSave = busy === 'idle' && trimmed >= LIMITS.resumeText.min && !tooLong;
+  const locked = busy !== 'idle' || disabled;
+  const canSave = !locked && trimmed >= LIMITS.resumeText.min && !tooLong;
 
   return (
     <div className={styles.panel}>
@@ -136,7 +143,7 @@ export function ResumePanel({
             ref={fileInputRef}
             type="file"
             accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            disabled={busy !== 'idle'}
+            disabled={locked}
             onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) void handleFile(file);
@@ -154,11 +161,11 @@ export function ResumePanel({
           className={styles.textarea}
           placeholder="Paste your resume here"
           value={text}
-          disabled={busy === 'loading' || busy === 'parsing'}
+          disabled={busy === 'loading' || busy === 'parsing' || disabled}
           onChange={(e) => {
             onTextChange(e.target.value);
             // Typed-over text is no longer the uploaded file.
-            if (label && label !== 'Pasted resume') setLabel('Pasted resume');
+            if (label && label !== 'Pasted resume') onLabelChange('Pasted resume');
           }}
         />
         <div className={`${styles.counter} ${tooShort || tooLong ? styles.counterBad : ''}`}>
@@ -173,6 +180,7 @@ export function ResumePanel({
           <input
             type="checkbox"
             checked={saveAsDefault}
+            disabled={disabled}
             onChange={(e) => onSaveAsDefaultChange(e.target.checked)}
           />
           Save as my default resume

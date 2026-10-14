@@ -2,7 +2,11 @@ import type {
   ApiErrorBody,
   ApiErrorCode,
   DefaultResume,
+  EvaluateRequest,
   HealthResponse,
+  JobDetail,
+  JobSummary,
+  TransferCodeResponse,
   ParseResumeResponse,
   Resume,
 } from '@app/shared';
@@ -79,6 +83,47 @@ export const api = {
 
   saveResume(input: SaveResumeInput): Promise<Resume> {
     return request<Resume>('/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  },
+
+  /** Newest first. `q` filters by job name or company. */
+  listJobs(q?: string): Promise<JobSummary[]> {
+    const query = q?.trim() ? `?q=${encodeURIComponent(q.trim())}` : '';
+    return request<JobSummary[]>(`/jobs${query}`);
+  },
+
+  getJob(id: number): Promise<JobDetail> {
+    return request<JobDetail>(`/jobs/${id}`);
+  },
+
+  deleteJob(id: number): Promise<void> {
+    return request<void>(`/jobs/${id}`, { method: 'DELETE' });
+  },
+
+  /** A short-lived, single-use code that opens this session on another device. */
+  createTransferCode(): Promise<TransferCodeResponse> {
+    return request<TransferCodeResponse>('/session/transfer-code', { method: 'POST' });
+  },
+
+  /** Adopts the session the code belongs to; this device's own rows become unreachable. */
+  adoptSession(code: string): Promise<void> {
+    return request<void>('/session/adopt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+  },
+
+  deleteMyData(): Promise<void> {
+    return request<void>('/session/data', { method: 'DELETE' });
+  },
+
+  /** Saves the evaluation server-side and returns it; takes 5-15s. */
+  evaluate(input: EvaluateRequest): Promise<JobDetail> {
+    return request<JobDetail>('/evaluate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),

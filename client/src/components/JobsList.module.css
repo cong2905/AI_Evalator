@@ -1,0 +1,120 @@
+.scroller {
+  overflow-x: auto;
+  background: var(--card-bg);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-size: var(--text-md);
+}
+
+.table th {
+  text-align: left;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid var(--divider);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px dashed var(--divider);
+  vertical-align: middle;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.table tbody tr:hover {
+  background: var(--row-hover);
+}
+
+.jobName {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--heading);
+}
+
+.company {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.matchCell {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  min-width: 190px;
+}
+
+.matchValue {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 3ch;
+  color: var(--ocean);
+}
+
+/* 8px tall with fully rounded ends, anchored left at 0. */
+.track {
+  display: block;
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--divider);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, var(--water-light), var(--water));
+}
+
+.date {
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.actions {
+  text-align: right;
+}
+
+.viewButton {
+  background: #fff;
+  border: 1.5px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  padding: 0.45rem 1rem;
+  font-weight: 600;
+  font-size: var(--text-md);
+  color: var(--ocean);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.viewButton:hover {
+  border-color: var(--ocean);
+  background: var(--surface-soft);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

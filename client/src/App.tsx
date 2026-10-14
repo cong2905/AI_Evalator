@@ -1,11 +1,26 @@
-import { NavLink, Route, Routes } from 'react-router-dom';
+import { Link, NavLink, Route, Routes } from 'react-router-dom';
 import { EvaluatePage } from './pages/EvaluatePage';
 import { JobsPage } from './pages/JobsPage';
+import { SeaBackground } from './components/SeaBackground';
+import { CreditBanner } from './components/CreditBanner';
 import styles from './App.module.css';
+
+function NotFound() {
+  return (
+    <section className={styles.card}>
+      <h1>Page not found</h1>
+      <p className={styles.muted}>
+        That address does not exist. Go to <Link to="/">Evaluate</Link> or the{' '}
+        <Link to="/jobs">Jobs database</Link>.
+      </p>
+    </section>
+  );
+}
 
 export function App() {
   return (
     <div className={styles.shell}>
+      <SeaBackground />
       <nav className={styles.nav}>
         <span className={styles.brand}>AI Job Evaluator</span>
         <NavLink
@@ -27,9 +42,11 @@ export function App() {
         <Routes>
           <Route path="/" element={<EvaluatePage />} />
           <Route path="/jobs" element={<JobsPage />} />
-          <Route path="*" element={<p>Page not found.</p>} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
+
+      <CreditBanner />
     </div>
   );
 }

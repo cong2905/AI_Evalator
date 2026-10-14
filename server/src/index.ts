@@ -1,6 +1,7 @@
 import { loadEnv, type Env } from './env.js';
 import { getDb, resolveDbPath } from './db/db.js';
 import { createApp } from './app.js';
+import { startPurgeSchedule } from './retention.js';
 
 function loadEnvOrExit(): Env {
   try {
@@ -14,13 +15,20 @@ function loadEnvOrExit(): Env {
 function main(): void {
   const env = loadEnvOrExit();
 
-  getDb(); // opens the file and runs migrations before we accept requests
+  const db = getDb(); // opens the file and runs migrations before we accept requests
   console.log(`[startup] database ready at ${resolveDbPath()}`);
 
+  // Enforces the retention window now and once a day after that.
+  startPurgeSchedule(db);
+
   const app = createApp();
-  // Localhost only — this app holds personal data and has no auth (SPEC.md section 9).
-  const server = app.listen(env.PORT, '127.0.0.1', () => {
-    console.log(`[startup] API on http://127.0.0.1:${env.PORT} · model ${env.GROQ_MODEL}`);
+
+  // Locally this binds to loopback only (SPEC.md section 9). In a container the
+  // platform's proxy reaches it from outside, so it has to listen on all
+  // interfaces — TLS and the public edge are the platform's job.
+  const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1';
+  const server = app.listen(env.PORT, host, () => {
+    console.log(`[startup] listening on http://${host}:${env.PORT} · model ${env.GROQ_MODEL}`);
   });
 
   for (const signal of ['SIGINT', 'SIGTERM'] as const) {

@@ -1,0 +1,37 @@
+# Rename `app` to something unique before the first deploy, or let
+# `fly launch` pick it. Change `primary_region` to the one nearest you.
+app = "ai-job-evaluator"
+primary_region = "yyz"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "3001"
+  DB_PATH = "/data/app.db"
+
+# SQLite lives on this volume. It is attached to ONE machine — see the note in
+# the README about never scaling past a single machine.
+[[mounts]]
+  source = "ai_evaluator_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Zero idle cost; a sleeping machine wakes in a second or two.
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/api/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

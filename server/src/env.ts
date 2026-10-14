@@ -11,6 +11,8 @@ export const SERVER_ROOT = serverRoot;
 const envSchema = z.object({
   GROQ_API_KEY: z.string().trim().min(1),
   GROQ_MODEL: z.string().trim().min(1).default('openai/gpt-oss-120b'),
+  /** Signs the visitor session cookie. Any long random string; changing it logs everyone out. */
+  SESSION_SECRET: z.string().trim().min(16),
   PORT: z.coerce.number().int().positive().default(3001),
   /** Override for tests; ':memory:' keeps the database off disk. */
   DB_PATH: z.string().trim().min(1).optional(),
@@ -32,8 +34,9 @@ export function parseEnv(source: Record<string, string | undefined>): Env {
       .join('\n');
     throw new Error(
       `Invalid server environment.\n${problems}\n\n` +
-        `Fix: copy .env.example to server/.env and fill in GROQ_API_KEY ` +
-        `(get one at https://console.groq.com/keys).`,
+        `Fix: copy .env.example to server/.env, fill in GROQ_API_KEY ` +
+        `(from https://console.groq.com/keys) and set SESSION_SECRET to a long random string ` +
+        `(node -e "console.log(crypto.randomUUID()+crypto.randomUUID())").`,
     );
   }
 

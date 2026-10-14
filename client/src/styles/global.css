@@ -1,17 +1,78 @@
-/* Design tokens from the mockups (SPEC.md section 8). */
+/*
+ * Summer-sea theme. Every colour, radius and font in the app comes from these
+ * tokens — component modules reference them and never hard-code a hex value.
+ */
 :root {
-  --bg: #f4f5f7;
-  --card: #ffffff;
-  --border: #cbd2dc;
-  --accent: #2457c5;
-  --text: #16191f;
-  --text-muted: #5b6472;
-  --met: #2457c5;
-  --partial: #b26a00;
-  --missing: #c0392b;
-  --radius: 8px;
-  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+  /* Sky and sea */
+  --sky-top: #bfe6ff;
+  --sky-bottom: #e9f7ff;
+  --sea-light: #f6fbff;
+  --sea-bottom: #d8f3f1;
+  --horizon: #a9dcef;
+
+  /* Brand */
+  --ocean: #0f7ea8;
+  --ocean-dark: #0a5a7a;
+  --ocean-soft: rgba(15, 126, 168, 0.12);
+  --focus-ring: 0 0 0 3px rgba(15, 126, 168, 0.2);
+
+  /* Ink. --text-muted is #46738a rather than #4f7f96 so 12-13px labels clear
+     WCAG AA (5.05:1) on cards; #4f7f96 measured 4.28:1. */
+  --heading: #0f5c86;
+  --text: #1d4a63;
+  --text-muted: #46738a;
+
+  /* Surfaces */
+  --card-bg: rgba(255, 255, 255, 0.88);
+  --card-border: #a9dcef;
+  --divider: #cfeaf5;
+  --score-bg: #eaf8ff;
+  --surface-soft: #f0fafd;
+  --input-bg: #ffffff;
+  --row-hover: rgba(15, 126, 168, 0.06);
+  --header-bg: rgba(255, 255, 255, 0.55);
+  --header-border: #9fd3ec;
+  --tab-inactive: #2b6f91;
+  --tab-hover-bg: #dcf1fb;
+  --disabled-bg: #b6d5e2;
+  --backdrop: rgba(13, 62, 85, 0.38);
+  --shadow-card: 0 4px 18px rgba(15, 92, 134, 0.08);
+  --shadow-modal: 0 16px 48px rgba(13, 62, 85, 0.26);
+
+  /* Decorative */
+  --water: #3bb6d6;
+  --water-light: #7fd8ea;
+  --wave: #c6eef0;
+  --sun: #ffe69a;
+  --cloud: #ffffff;
+
+  /* Status */
+  --met-bg: #d4f4ec;
+  --met-text: #11705a;
+  --partial-bg: #fff1c7;
+  --partial-text: #8a5d00;
+  --missing-bg: #ffe0d8;
+  --missing-text: #a8381c;
+
+  /* Shape */
+  --radius-card: 16px;
+  --radius-input: 12px;
+  --radius-pill: 999px;
+
+  /* Type */
+  --font-heading: 'Zen Maru Gothic', 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Nunito', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Type scale. Every component size references these, so changing the scale
+     is one edit here rather than forty across the modules. */
+  --text-xs: 13px;
+  --text-sm: 14px;
+  --text-md: 15px;
+  --text-base: 16px;
+  --text-lg: 1.35rem;
+  --text-xl: 2.1rem;
+  --text-score: 3rem;
+
   color-scheme: light;
 }
 
@@ -23,38 +84,43 @@ html,
 body {
   margin: 0;
   padding: 0;
+  min-height: 100%;
 }
 
 body {
-  background: var(--bg);
+  /* Fallback beneath the fixed background layers in SeaBackground. */
+  background: linear-gradient(to bottom, var(--sky-top) 0%, var(--sky-bottom) 38%, var(--sea-light) 38%, var(--sea-bottom) 100%);
+  background-attachment: fixed;
   color: var(--text);
-  font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.5;
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
 
 a {
-  color: var(--accent);
+  color: var(--ocean);
 }
 
 h1,
 h2,
 h3 {
   margin: 0 0 0.5rem;
-  line-height: 1.25;
+  line-height: 1.3;
+  font-family: var(--font-heading);
+  font-weight: 700;
+  color: var(--heading);
 }
 
-code,
-pre {
-  font-family: var(--font-mono);
-}
-
-button {
-  font: inherit;
+button,
+input,
+textarea,
+select {
+  font-family: var(--font-body);
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--ocean);
   outline-offset: 2px;
+  border-radius: 4px;
 }
