@@ -1,0 +1,42 @@
+# Runs the app behind Caddy, which gets and renews a TLS certificate on its own.
+# HTTPS is not optional here: the session cookie is marked Secure in production,
+# so over plain HTTP a browser silently refuses to store it and every visitor
+# looks like a brand new session on every request.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      DB_PATH: /data/app.db
+    volumes:
+      # The named volume is what makes SQLite survive restarts and redeploys.
+      - app-data:/data
+    expose:
+      - "3001"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN in deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here; losing this volume means re-issuing on restart.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  app-data:
+  caddy-data:
+  caddy-config:

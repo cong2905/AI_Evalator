@@ -1,0 +1,7 @@
+# These files are executed on Linux. Checked out with CRLF they fail with an
+# obscure "\r: command not found", so pin them to LF on every platform.
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+Caddyfile text eol=lf

@@ -114,7 +114,7 @@ anything.
 | Validation | **Zod** | Checks every request and every AI response before it's used |
 | Protection | **express-rate-limit**, signed cookies | Limits per IP address, per visitor, and for the whole site |
 | Testing | **Vitest** | Server and component tests. The tests never call the real AI service |
-| Hosting | **Docker** on **Fly.io** | One container that serves both the website and the API |
+| Hosting | **Docker** on an **Oracle Cloud Always Free** VM, behind **Caddy** | One container serving the website and the API, with automatic HTTPS |
 
 ### How it works
 

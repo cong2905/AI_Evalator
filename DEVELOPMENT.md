@@ -92,46 +92,52 @@ node server/test/fixtures/make-fixtures.mjs
 ## Deploying
 
 The app ships as one container: Express serves both the API and the built client on a single port.
-It needs a **persistent disk** for the SQLite file. That rules out Vercel and Netlify, and Render's
-free tier is a poor fit (no disk, plus ~50s cold starts). These steps use Fly.io.
+It needs a **persistent disk** for the SQLite file, which rules out free tiers that only offer
+ephemeral storage — Render's free web services, for instance, have no disk and wipe local files on
+every spin-down. The setup below uses an Oracle Cloud Always Free VM, which provides a real disk at
+no cost.
 
-**Install flyctl first.** It is a separate program, not an npm package. In PowerShell:
+### Oracle Cloud Always Free
 
-```powershell
-iwr https://fly.io/install.ps1 -useb | iex
-```
-
-It lands in `%USERPROFILE%\.fly\bin` and is added to your PATH. **Open a new terminal afterwards**,
-or the `fly` command won't be found in the terminal you already had open.
-
-Then, in PowerShell from the project root:
-
-```powershell
-fly auth login                  # opens a browser; a card on file is required even on the free tier
-
-fly launch --no-deploy          # answer NO to deploying now - the secrets are not set yet
-
-fly volumes create ai_evaluator_data --size 1
-
-fly secrets set GROQ_API_KEY="gsk_your_key_here"
-
-# Generate the session secret, then paste it into the next command.
-node -e "console.log(crypto.randomUUID()+crypto.randomUUID())"
-fly secrets set SESSION_SECRET="paste_the_value_here"
-
-fly deploy
-
-fly open                        # opens the live URL
-fly logs                        # startup lines: database ready / serving client / listening
-```
-
-In Git Bash the secret can be generated inline instead:
+Everything needed is in `deploy/`. On a fresh Ubuntu VM:
 
 ```bash
-fly secrets set SESSION_SECRET="$(node -e 'console.log(crypto.randomUUID()+crypto.randomUUID())')"
+git clone https://github.com/cong2905/AI_Evalator.git
+cd AI_Evalator
+bash deploy/setup-vm.sh          # docker, swap if needed, host firewall
+cp deploy/.env.example deploy/.env
+nano deploy/.env                 # GROQ_API_KEY, SESSION_SECRET, SITE_DOMAIN, ACME_EMAIL
+cd deploy && docker compose up -d --build
+docker compose logs -f app       # expect: database ready / serving client / listening
 ```
 
-### Two constraints that will bite if ignored
+Two prerequisites are easy to miss, and each fails silently:
+
+1. **Both firewalls must allow 80 and 443.** `setup-vm.sh` opens the host's iptables rules, but the
+   OCI console has a *separate* Security List that blocks them by default
+   (Networking → Virtual Cloud Networks → your VCN → Security Lists → default → add ingress rules
+   for TCP 80 and 443 from `0.0.0.0/0`). Open only one and the site is unreachable with nothing in
+   the logs to explain it.
+2. **You need a hostname, not just the IP.** Caddy cannot issue a TLS certificate for a bare IP
+   address, and without HTTPS the `Secure` session cookie is dropped by every browser — the site
+   would look like it works while losing every visitor's session on every request. A free DuckDNS
+   subdomain pointed at the VM's public IP is enough.
+
+Updating after a push:
+
+```bash
+git pull && cd deploy && docker compose up -d --build
+```
+
+The database lives in the `app-data` Docker volume, so it survives restarts and rebuilds.
+`docker compose down` keeps it; `docker compose down -v` destroys it.
+
+### Fly.io (previous host)
+
+`Dockerfile` and `fly.toml` remain correct. Fly's trial ends and then requires a card; with one
+added, `fly deploy` restores the same app on a managed volume with no VM to maintain.
+
+### Two constraints that will bite on any host
 
 1. **Never rotate `SESSION_SECRET` casually.** Every visitor cookie is signed with it. Changing it
    invalidates all of them at once: every session resets and every saved row is orphaned. Set it
