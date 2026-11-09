@@ -1,4 +1,5 @@
 import type { Db } from './db/db.js';
+import { run } from './db/sql.js';
 
 /**
  * Strangers' resumes are personal data, so the demo does not keep them
@@ -29,57 +30,86 @@ function cutoffIso(now: Date): string {
  * behind by a cleared cookie (`session_id IS NULL`), which nobody can reach
  * again. Row age is irrelevant — only the visitor's last visit counts.
  *
- * Order matters: jobs reference resumes, so jobs go first (job_items follow by
- * ON DELETE CASCADE) and a resume is only removed once no job still points at
- * it — an active visitor may still rely on a very old resume.
+ * Order matters: jobs reference resumes, so jobs go first (and their items
+ * ahead of them, since nothing here relies on ON DELETE CASCADE) and a resume
+ * is only removed once no job still points at it — an active visitor may still
+ * rely on a very old resume.
  */
-export function purgeExpiredData(db: Db, now = new Date()): PurgeResult {
+export async function purgeExpiredData(db: Db, now = new Date()): Promise<PurgeResult> {
   const cutoff = cutoffIso(now);
   const nowIso = now.toISOString();
 
-  const run = db.transaction((): PurgeResult => {
-    const live = 'SELECT id FROM sessions WHERE last_seen_at >= ?';
+  const live = 'SELECT id FROM sessions WHERE last_seen_at >= ?';
+  const doomed = `SELECT id FROM jobs WHERE session_id IS NULL OR session_id NOT IN (${live})`;
 
-    const jobs = db
-      .prepare(`DELETE FROM jobs WHERE session_id IS NULL OR session_id NOT IN (${live})`)
-      .run(cutoff).changes;
+  const tx = await db.transaction('write');
+  try {
+    await run(tx, `DELETE FROM job_items WHERE job_id IN (${doomed})`, [cutoff]);
 
-    const resumes = db
-      .prepare(
-        `DELETE FROM resumes
-         WHERE (session_id IS NULL OR session_id NOT IN (${live}))
-           AND id NOT IN (SELECT resume_id FROM jobs)`,
-      )
-      .run(cutoff).changes;
+    const jobs = await run(
+      tx,
+      `DELETE FROM jobs WHERE session_id IS NULL OR session_id NOT IN (${live})`,
+      [cutoff],
+    );
 
-    const codes = db
-      .prepare('DELETE FROM transfer_codes WHERE expires_at < ? OR used_at IS NOT NULL')
-      .run(nowIso).changes;
+    const resumes = await run(
+      tx,
+      `DELETE FROM resumes
+       WHERE (session_id IS NULL OR session_id NOT IN (${live}))
+         AND id NOT IN (SELECT resume_id FROM jobs)`,
+      [cutoff],
+    );
 
-    const sessions = db
-      .prepare('DELETE FROM sessions WHERE last_seen_at < ?')
-      .run(cutoff).changes;
+    const codes = await run(
+      tx,
+      'DELETE FROM transfer_codes WHERE expires_at < ? OR used_at IS NOT NULL',
+      [nowIso],
+    );
 
-    return { jobs, resumes, codes, sessions };
-  });
+    const sessions = await run(tx, 'DELETE FROM sessions WHERE last_seen_at < ?', [cutoff]);
 
-  return run();
+    // Belt and braces: an item whose job vanished some other way is unreachable
+    // and would otherwise sit in the table forever.
+    await run(tx, 'DELETE FROM job_items WHERE job_id NOT IN (SELECT id FROM jobs)');
+
+    await tx.commit();
+    return {
+      jobs: jobs.changes,
+      resumes: resumes.changes,
+      codes: codes.changes,
+      sessions: sessions.changes,
+    };
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
 }
 
 /** Everything belonging to one visitor, for the "delete my data" button. */
-export function purgeSession(db: Db, sessionId: string): PurgeResult {
-  const run = db.transaction((): PurgeResult => {
-    const jobs = db.prepare('DELETE FROM jobs WHERE session_id = ?').run(sessionId).changes;
-    const resumes = db.prepare('DELETE FROM resumes WHERE session_id = ?').run(sessionId).changes;
-    const codes = db
-      .prepare('DELETE FROM transfer_codes WHERE session_id = ?')
-      .run(sessionId).changes;
-    const sessions = db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId).changes;
+export async function purgeSession(db: Db, sessionId: string): Promise<PurgeResult> {
+  const tx = await db.transaction('write');
+  try {
+    await run(
+      tx,
+      'DELETE FROM job_items WHERE job_id IN (SELECT id FROM jobs WHERE session_id = ?)',
+      [sessionId],
+    );
+    const jobs = await run(tx, 'DELETE FROM jobs WHERE session_id = ?', [sessionId]);
+    const resumes = await run(tx, 'DELETE FROM resumes WHERE session_id = ?', [sessionId]);
+    const codes = await run(tx, 'DELETE FROM transfer_codes WHERE session_id = ?', [sessionId]);
+    const sessions = await run(tx, 'DELETE FROM sessions WHERE id = ?', [sessionId]);
 
-    return { jobs, resumes, codes, sessions };
-  });
-
-  return run();
+    await tx.commit();
+    return {
+      jobs: jobs.changes,
+      resumes: resumes.changes,
+      codes: codes.changes,
+      sessions: sessions.changes,
+    };
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
 }
 
 function logPurge(result: PurgeResult): void {
@@ -91,15 +121,15 @@ function logPurge(result: PurgeResult): void {
 }
 
 /** Runs once at startup and daily after that. */
-export function startPurgeSchedule(db: Db): NodeJS.Timeout {
-  logPurge(purgeExpiredData(db));
+export async function startPurgeSchedule(db: Db): Promise<NodeJS.Timeout> {
+  logPurge(await purgeExpiredData(db));
 
   const timer = setInterval(() => {
-    try {
-      logPurge(purgeExpiredData(db));
-    } catch (err) {
-      console.error('[retention] purge failed:', err);
-    }
+    void purgeExpiredData(db)
+      .then(logPurge)
+      .catch((err: unknown) => {
+        console.error('[retention] purge failed:', err);
+      });
   }, PURGE_INTERVAL_MS);
 
   // Never hold the process open just for the next sweep.

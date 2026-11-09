@@ -25,12 +25,12 @@ type ResolvedResume = { id: number; content: string };
  * Unsaved text is stored as a non-default row first so `jobs.resume_id` is
  * always a real reference.
  */
-function resolveResume(input: EvaluateInput): ResolvedResume {
-  const db = getDb();
+async function resolveResume(input: EvaluateInput): Promise<ResolvedResume> {
+  const db = await getDb();
 
   if (input.resumeText !== undefined) {
     const content = assertLength(input.resumeText, 'Resume text', LIMITS.resumeText);
-    const saved = insertResume(db, {
+    const saved = await insertResume(db, {
       label: 'Resume used for evaluation',
       content,
       setDefault: false,
@@ -40,14 +40,14 @@ function resolveResume(input: EvaluateInput): ResolvedResume {
   }
 
   if (input.resumeId !== undefined) {
-    const resume = getResumeById(db, input.sessionId, input.resumeId);
+    const resume = await getResumeById(db, input.sessionId, input.resumeId);
     if (!resume) {
       throw new ApiError('NOT_FOUND', `No resume with id ${input.resumeId}.`);
     }
     return { id: resume.id, content: resume.content };
   }
 
-  const fallback = getDefaultResume(db, input.sessionId);
+  const fallback = await getDefaultResume(db, input.sessionId);
   if (!fallback) {
     throw new ApiError('NO_DEFAULT_RESUME', 'Save a resume before evaluating a job.');
   }
@@ -79,9 +79,9 @@ export async function runEvaluation(
   const company = assertLength(input.company, 'Company', LIMITS.company);
 
   // Checked before the resume is stored, so a capped request leaves nothing behind.
-  assertDailyBudget(getDb(), input.sessionId);
+  await assertDailyBudget(await getDb(), input.sessionId);
 
-  const resume = resolveResume(input);
+  const resume = await resolveResume(input);
   const { payload, model } = await deps.evaluate(resume.content, jdText);
 
   const items = toItems(payload);
@@ -91,8 +91,8 @@ export async function runEvaluation(
   }
 
   const matchScore = computeMatchScore(items);
-  const db = getDb();
-  const jobId = insertJob(db, {
+  const db = await getDb();
+  const jobId = await insertJob(db, {
     sessionId: input.sessionId,
     jobName,
     company,
@@ -105,7 +105,7 @@ export async function runEvaluation(
     items,
   });
 
-  const detail = getJobDetail(db, input.sessionId, jobId);
+  const detail = await getJobDetail(db, input.sessionId, jobId);
   if (!detail) {
     throw new ApiError('INTERNAL_ERROR', 'The evaluation was lost right after saving.');
   }

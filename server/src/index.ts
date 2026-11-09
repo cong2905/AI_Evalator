@@ -1,5 +1,5 @@
 import { loadEnv, type Env } from './env.js';
-import { getDb, resolveDbPath } from './db/db.js';
+import { describeDbTarget, getDb } from './db/db.js';
 import { createApp } from './app.js';
 import { startPurgeSchedule } from './retention.js';
 
@@ -12,14 +12,17 @@ function loadEnvOrExit(): Env {
   }
 }
 
-function main(): void {
+async function main(): Promise<void> {
   const env = loadEnvOrExit();
 
-  const db = getDb(); // opens the file and runs migrations before we accept requests
-  console.log(`[startup] database ready at ${resolveDbPath()}`);
+  // Connects and runs migrations before we accept requests. A hosted database
+  // can be unreachable, so this is the one place that failure is worth dying
+  // on: serving an app whose database is absent only produces 500s.
+  const db = await getDb();
+  console.log(`[startup] database ready at ${describeDbTarget()}`);
 
   // Enforces the retention window now and once a day after that.
-  startPurgeSchedule(db);
+  await startPurgeSchedule(db);
 
   const app = createApp();
 
@@ -38,4 +41,7 @@ function main(): void {
   }
 }
 
-main();
+main().catch((err: unknown) => {
+  console.error(`\n[startup] ${err instanceof Error ? err.message : String(err)}\n`);
+  process.exit(1);
+});

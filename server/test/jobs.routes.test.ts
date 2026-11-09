@@ -6,6 +6,7 @@ import { closeDb, getDb } from '../src/db/db.js';
 import { insertResume } from '../src/db/repositories/resumeRepo.js';
 import { insertJob, type NewJob } from '../src/db/repositories/jobRepo.js';
 import { startSession, visitor, type Agent } from './helpers/session.js';
+import { rows } from './helpers/db.js';
 
 const app = createApp();
 
@@ -21,9 +22,9 @@ const item = (over: Partial<JobItem> = {}): JobItem => ({
   ...over,
 });
 
-function seedJob(over: Partial<NewJob> = {}): number {
-  const db = getDb();
-  const resume = insertResume(db, {
+async function seedJob(over: Partial<NewJob> = {}): Promise<number> {
+  const db = await getDb();
+  const resume = await insertResume(db, {
     label: 'resume.pdf',
     content: 'resume content',
     setDefault: true,
@@ -46,7 +47,7 @@ function seedJob(over: Partial<NewJob> = {}): number {
 }
 
 beforeEach(async () => {
-  closeDb();
+  await closeDb();
   vi.spyOn(console, 'log').mockImplementation(() => {});
   agent = visitor(app);
   // Rows seeded straight into the database must belong to this agent's session.
@@ -62,9 +63,9 @@ describe('GET /api/jobs', () => {
   });
 
   it('returns summaries, newest first', async () => {
-    seedJob({ jobName: 'Oldest' });
-    seedJob({ jobName: 'Middle' });
-    seedJob({ jobName: 'Newest' });
+    await seedJob({ jobName: 'Oldest' });
+    await seedJob({ jobName: 'Middle' });
+    await seedJob({ jobName: 'Newest' });
 
     const res = await agent.get('/api/jobs');
 
@@ -76,7 +77,7 @@ describe('GET /api/jobs', () => {
   });
 
   it('returns only summary fields, not the whole evaluation', async () => {
-    seedJob();
+    await seedJob();
 
     const res = await agent.get('/api/jobs');
 
@@ -90,8 +91,8 @@ describe('GET /api/jobs', () => {
   });
 
   it('searches job name and company, case-insensitively', async () => {
-    seedJob({ jobName: 'Frontend Engineer', company: 'Acme' });
-    seedJob({ jobName: 'Data Analyst', company: 'Globex' });
+    await seedJob({ jobName: 'Frontend Engineer', company: 'Acme' });
+    await seedJob({ jobName: 'Data Analyst', company: 'Globex' });
 
     const byName = await agent.get('/api/jobs?q=front');
     const byCompany = await agent.get('/api/jobs?q=GLOBEX');
@@ -105,8 +106,8 @@ describe('GET /api/jobs', () => {
   });
 
   it('treats % and _ as literal characters in a search', async () => {
-    seedJob({ jobName: '100% remote role' });
-    seedJob({ jobName: 'Onsite role' });
+    await seedJob({ jobName: '100% remote role' });
+    await seedJob({ jobName: 'Onsite role' });
 
     const res = await agent.get('/api/jobs?q=%25'); // the percent sign itself
 
@@ -115,7 +116,7 @@ describe('GET /api/jobs', () => {
   });
 
   it('ignores a blank search', async () => {
-    seedJob();
+    await seedJob();
 
     const res = await agent.get('/api/jobs?q=   ');
 
@@ -125,7 +126,7 @@ describe('GET /api/jobs', () => {
 
 describe('GET /api/jobs/:id', () => {
   it('returns the full detail with its items', async () => {
-    const id = seedJob();
+    const id = await seedJob();
 
     const res = await agent.get(`/api/jobs/${id}`);
 
@@ -162,32 +163,28 @@ describe('GET /api/jobs/:id', () => {
 
 describe('DELETE /api/jobs/:id', () => {
   it('deletes the job and its items', async () => {
-    const id = seedJob();
+    const id = await seedJob();
 
     const res = await agent.delete(`/api/jobs/${id}`);
 
     expect(res.status).toBe(204);
     expect(res.body).toEqual({});
 
-    const db = getDb();
-    const jobs = db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number };
-    const items = db.prepare('SELECT COUNT(*) AS n FROM job_items').get() as { n: number };
-    expect(jobs.n).toBe(0);
-    expect(items.n).toBe(0);
+    expect(await rows('jobs')).toBe(0);
+    expect(await rows('job_items')).toBe(0);
   });
 
   it('leaves the resume behind, since other jobs may point at it', async () => {
-    const id = seedJob();
+    const id = await seedJob();
 
     await agent.delete(`/api/jobs/${id}`);
 
-    const resumes = getDb().prepare('SELECT COUNT(*) AS n FROM resumes').get() as { n: number };
-    expect(resumes.n).toBe(1);
+    expect(await rows('resumes')).toBe(1);
   });
 
   it('deletes only the requested job', async () => {
-    const keep = seedJob({ jobName: 'Keep me' });
-    const drop = seedJob({ jobName: 'Drop me' });
+    const keep = await seedJob({ jobName: 'Keep me' });
+    const drop = await seedJob({ jobName: 'Drop me' });
 
     await agent.delete(`/api/jobs/${drop}`);
 
@@ -197,7 +194,7 @@ describe('DELETE /api/jobs/:id', () => {
   });
 
   it('404s when the job is already gone', async () => {
-    const id = seedJob();
+    const id = await seedJob();
     await agent.delete(`/api/jobs/${id}`);
 
     const res = await agent.delete(`/api/jobs/${id}`);

@@ -3,10 +3,13 @@ import type { JobItem } from '@app/shared';
 import { closeDb, getDb } from '../src/db/db.js';
 import { insertResume } from '../src/db/repositories/resumeRepo.js';
 import { getJobDetail, insertJob, type NewJob } from '../src/db/repositories/jobRepo.js';
+import { exec, rows } from './helpers/db.js';
 
 const SESSION = 'session-under-test';
 
-beforeEach(() => closeDb());
+beforeEach(async () => {
+  await closeDb();
+});
 
 const item = (over: Partial<JobItem> = {}): JobItem => ({
   requirement: 'React',
@@ -17,8 +20,8 @@ const item = (over: Partial<JobItem> = {}): JobItem => ({
   ...over,
 });
 
-function newJob(over: Partial<NewJob> = {}): NewJob {
-  const resume = insertResume(getDb(), {
+async function newJob(over: Partial<NewJob> = {}): Promise<NewJob> {
+  const resume = await insertResume(await getDb(), {
     label: 'resume.pdf',
     content: 'resume content',
     setDefault: true,
@@ -41,11 +44,11 @@ function newJob(over: Partial<NewJob> = {}): NewJob {
 }
 
 describe('insertJob', () => {
-  it('round-trips a job through getJobDetail', () => {
-    const db = getDb();
-    const id = insertJob(db, newJob());
+  it('round-trips a job through getJobDetail', async () => {
+    const db = await getDb();
+    const id = await insertJob(db, await newJob());
 
-    const detail = getJobDetail(db, SESSION, id);
+    const detail = await getJobDetail(db, SESSION, id);
 
     expect(detail).toMatchObject({
       id,
@@ -60,9 +63,9 @@ describe('insertJob', () => {
     expect(detail?.items).toEqual([item()]);
   });
 
-  it('writes the job and its items atomically', () => {
-    const db = getDb();
-    const broken = newJob({
+  it('writes the job and its items atomically', async () => {
+    const db = await getDb();
+    const broken = await newJob({
       items: [
         item({ requirement: 'first' }),
         // Slips past the type system the way a bad migration or bad cast would;
@@ -71,29 +74,27 @@ describe('insertJob', () => {
       ],
     });
 
-    expect(() => insertJob(db, broken)).toThrow(/CHECK constraint failed/i);
+    await expect(insertJob(db, broken)).rejects.toThrow(/CHECK constraint failed/i);
 
-    const jobs = db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number };
-    const items = db.prepare('SELECT COUNT(*) AS n FROM job_items').get() as { n: number };
-    expect(jobs.n).toBe(0);
-    expect(items.n).toBe(0);
+    expect(await rows('jobs')).toBe(0);
+    expect(await rows('job_items')).toBe(0);
   });
 
-  it('keeps each job independent when the same resume is evaluated twice', () => {
-    const db = getDb();
-    const first = newJob();
-    const secondId = insertJob(db, { ...first, jobName: 'Second run', matchScore: 40 });
-    const firstId = insertJob(db, first);
+  it('keeps each job independent when the same resume is evaluated twice', async () => {
+    const db = await getDb();
+    const first = await newJob();
+    const secondId = await insertJob(db, { ...first, jobName: 'Second run', matchScore: 40 });
+    const firstId = await insertJob(db, first);
 
-    expect(getJobDetail(db, SESSION, secondId)?.jobName).toBe('Second run');
-    expect(getJobDetail(db, SESSION, firstId)?.matchScore).toBe(75);
+    expect((await getJobDetail(db, SESSION, secondId))?.jobName).toBe('Second run');
+    expect((await getJobDetail(db, SESSION, firstId))?.matchScore).toBe(75);
   });
 
-  it('sorts must before nice while keeping the original order inside each group', () => {
-    const db = getDb();
-    const id = insertJob(
+  it('sorts must before nice while keeping the original order inside each group', async () => {
+    const db = await getDb();
+    const id = await insertJob(
       db,
-      newJob({
+      await newJob({
         items: [
           item({ requirement: 'nice-first', importance: 'nice' }),
           item({ requirement: 'must-first', importance: 'must' }),
@@ -103,7 +104,7 @@ describe('insertJob', () => {
       }),
     );
 
-    expect(getJobDetail(db, SESSION, id)?.items.map((i) => i.requirement)).toEqual([
+    expect((await getJobDetail(db, SESSION, id))?.items.map((i) => i.requirement)).toEqual([
       'must-first',
       'must-second',
       'nice-first',
@@ -113,15 +114,15 @@ describe('insertJob', () => {
 });
 
 describe('getJobDetail', () => {
-  it('returns undefined for an unknown id', () => {
-    expect(getJobDetail(getDb(), SESSION, 404)).toBeUndefined();
+  it('returns undefined for an unknown id', async () => {
+    expect(await getJobDetail(await getDb(), SESSION, 404)).toBeUndefined();
   });
 
-  it('survives a corrupt missing_keywords column', () => {
-    const db = getDb();
-    const id = insertJob(db, newJob());
-    db.prepare('UPDATE jobs SET missing_keywords = ? WHERE id = ?').run('not json', id);
+  it('survives a corrupt missing_keywords column', async () => {
+    const db = await getDb();
+    const id = await insertJob(db, await newJob());
+    await exec('UPDATE jobs SET missing_keywords = ? WHERE id = ?', ['not json', id]);
 
-    expect(getJobDetail(db, SESSION, id)?.missingKeywords).toEqual([]);
+    expect((await getJobDetail(db, SESSION, id))?.missingKeywords).toEqual([]);
   });
 });

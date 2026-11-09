@@ -1,15 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # ---- build ----------------------------------------------------------------
-# Debian rather than Alpine: better-sqlite3 is a native module and its
-# prebuilt binaries are glibc-based.
+# Debian rather than Alpine: libSQL's native module ships glibc prebuilds
+# (@libsql/linux-x64-gnu), so no compiler is needed here — on musl npm would
+# reach for the musl build instead, but the prebuild set is smaller.
 FROM node:22-slim AS build
 WORKDIR /app
-
-# Build tools, in case no prebuilt better-sqlite3 binary matches this platform.
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends python3 make g++ ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 COPY client/package.json client/
@@ -30,7 +26,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3001
-# The volume mounted at /data is the only writable, persistent path.
+# Used only when TURSO_DATABASE_URL is unset. On a host with a real volume
+# mounted at /data this is the database; on a host with no persistent disk,
+# set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN and this is ignored.
 ENV DB_PATH=/data/app.db
 
 COPY --from=build /app/node_modules ./node_modules

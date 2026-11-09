@@ -1,0 +1,35 @@
+# Render blueprint. Create the service by pointing Render at this repository
+# (New > Blueprint), then fill in the four secrets it asks for.
+#
+# Why there is no disk here: a free Render web service cannot attach one, and
+# its filesystem is wiped on every restart and every deploy. The database
+# therefore lives on Turso, reached over the network — see TURSO_DATABASE_URL.
+services:
+  - type: web
+    name: ai-job-evaluator
+    runtime: node
+    plan: free
+    # The repository is an npm workspaces monorepo, so both commands run from
+    # the root and address the workspaces by name.
+    #
+    # --include=dev is load-bearing: Render exposes NODE_ENV=production to the
+    # BUILD as well as the runtime, and npm then omits devDependencies, which
+    # would strip vite (so the client never builds) and tsx (so the server never
+    # starts). Both failures look like a broken repository rather than a flag.
+    buildCommand: npm ci --include=dev && npm run build -w client
+    startCommand: npm start -w server
+    healthCheckPath: /api/health
+    envVars:
+      # Also what makes the session cookie Secure. Render serves the free
+      # .onrender.com hostname over HTTPS, so the cookie survives the round trip.
+      - key: NODE_ENV
+        value: production
+      # Render provides PORT; the server already reads it.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: TURSO_DATABASE_URL
+        sync: false
+      - key: TURSO_AUTH_TOKEN
+        sync: false

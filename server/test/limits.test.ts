@@ -15,6 +15,7 @@ const {
 const { ApiError } = await import('../src/errors.js');
 const { insertResume } = await import('../src/db/repositories/resumeRepo.js');
 const { insertJob } = await import('../src/db/repositories/jobRepo.js');
+const { exec, rows } = await import('./helpers/db.js');
 
 // A fresh app per test: express-rate-limit keeps its counters in memory, so a
 // shared instance would carry one test's burst into the next.
@@ -47,9 +48,13 @@ const body = (over: Record<string, unknown> = {}) => ({
 });
 
 /** Writes `count` jobs for a session with a chosen timestamp, cheaply. */
-function seedJobs(sessionId: string, count: number, createdAt = new Date().toISOString()): void {
-  const db = getDb();
-  const resume = insertResume(db, {
+async function seedJobs(
+  sessionId: string,
+  count: number,
+  createdAt = new Date().toISOString(),
+): Promise<void> {
+  const db = await getDb();
+  const resume = await insertResume(db, {
     label: 'r.pdf',
     content: 'content',
     setDefault: false,
@@ -57,7 +62,7 @@ function seedJobs(sessionId: string, count: number, createdAt = new Date().toISO
   });
 
   for (let i = 0; i < count; i += 1) {
-    const id = insertJob(db, {
+    const id = await insertJob(db, {
       sessionId,
       jobName: `Job ${i}`,
       company: 'Acme',
@@ -77,12 +82,12 @@ function seedJobs(sessionId: string, count: number, createdAt = new Date().toISO
         },
       ],
     });
-    db.prepare('UPDATE jobs SET created_at = ? WHERE id = ?').run(createdAt, id);
+    await exec('UPDATE jobs SET created_at = ? WHERE id = ?', [createdAt, id]);
   }
 }
 
-beforeEach(() => {
-  closeDb();
+beforeEach(async () => {
+  await closeDb();
   evaluateWithGroq.mockReset();
   evaluateWithGroq.mockResolvedValue({ payload: PAYLOAD, model: 'openai/gpt-oss-120b' });
   vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -101,57 +106,57 @@ describe('secondsUntilReset', () => {
 });
 
 describe('the per-visitor daily cap', () => {
-  it('allows evaluations up to the cap', () => {
-    seedJobs('alice', DAILY_EVALUATIONS_PER_SESSION - 1);
+  it('allows evaluations up to the cap', async () => {
+    await seedJobs('alice', DAILY_EVALUATIONS_PER_SESSION - 1);
 
-    expect(() => assertDailyBudget(getDb(), 'alice')).not.toThrow();
+    await expect(assertDailyBudget(await getDb(), 'alice')).resolves.toBeUndefined();
   });
 
-  it('blocks the one after the cap', () => {
-    seedJobs('alice', DAILY_EVALUATIONS_PER_SESSION);
+  it('blocks the one after the cap', async () => {
+    await seedJobs('alice', DAILY_EVALUATIONS_PER_SESSION);
 
-    expect(() => assertDailyBudget(getDb(), 'alice')).toThrow(ApiError);
-    try {
-      assertDailyBudget(getDb(), 'alice');
-    } catch (err) {
-      const apiErr = err as InstanceType<typeof ApiError>;
-      expect(apiErr.code).toBe('RATE_LIMITED');
-      expect(apiErr.status).toBe(429);
-      expect(apiErr.retryAfter).toBeGreaterThan(0);
-      expect(apiErr.message).toMatch(/per visitor per day/i);
-    }
+    const err = await assertDailyBudget(await getDb(), 'alice').catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    const apiErr = err as InstanceType<typeof ApiError>;
+    expect(apiErr.code).toBe('RATE_LIMITED');
+    expect(apiErr.status).toBe(429);
+    expect(apiErr.retryAfter).toBeGreaterThan(0);
+    expect(apiErr.message).toMatch(/per visitor per day/i);
   });
 
-  it('does not punish one visitor for another visitor’s usage', () => {
-    seedJobs('alice', DAILY_EVALUATIONS_PER_SESSION);
+  it('does not punish one visitor for another visitor’s usage', async () => {
+    await seedJobs('alice', DAILY_EVALUATIONS_PER_SESSION);
 
-    expect(() => assertDailyBudget(getDb(), 'bob')).not.toThrow();
+    await expect(assertDailyBudget(await getDb(), 'bob')).resolves.toBeUndefined();
   });
 
-  it('ignores yesterday’s evaluations', () => {
+  it('ignores yesterday’s evaluations', async () => {
     const yesterday = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
-    seedJobs('alice', DAILY_EVALUATIONS_PER_SESSION + 3, yesterday);
+    await seedJobs('alice', DAILY_EVALUATIONS_PER_SESSION + 3, yesterday);
 
-    expect(() => assertDailyBudget(getDb(), 'alice')).not.toThrow();
+    await expect(assertDailyBudget(await getDb(), 'alice')).resolves.toBeUndefined();
   });
 });
 
 describe('the global daily ceiling', () => {
-  it('stops everyone once the demo has spent its budget', () => {
+  it('stops everyone once the demo has spent its budget', async () => {
     // Spread across many sessions, so no per-visitor cap fires first.
     for (let i = 0; i < DAILY_EVALUATIONS_GLOBAL; i += 1) {
-      seedJobs(`visitor-${i}`, 1);
+      await seedJobs(`visitor-${i}`, 1);
     }
 
-    expect(() => assertDailyBudget(getDb(), 'a-brand-new-visitor')).toThrow(/daily limit/i);
+    await expect(assertDailyBudget(await getDb(), 'a-brand-new-visitor')).rejects.toThrow(
+      /daily limit/i,
+    );
   });
 
-  it('is the backstop when someone keeps minting new sessions', () => {
+  it('is the backstop when someone keeps minting new sessions', async () => {
     for (let i = 0; i < DAILY_EVALUATIONS_GLOBAL - 1; i += 1) {
-      seedJobs(`visitor-${i}`, 1);
+      await seedJobs(`visitor-${i}`, 1);
     }
 
-    expect(() => assertDailyBudget(getDb(), 'fresh')).not.toThrow();
+    await expect(assertDailyBudget(await getDb(), 'fresh')).resolves.toBeUndefined();
   });
 });
 
@@ -161,7 +166,7 @@ describe('POST /api/evaluate under the daily cap', () => {
     const sessionId = await startSession(agent);
     // Seed the day's usage directly: five calls in a row would trip the
     // per-minute burst limiter first, which is a different layer.
-    seedJobs(sessionId, DAILY_EVALUATIONS_PER_SESSION);
+    await seedJobs(sessionId, DAILY_EVALUATIONS_PER_SESSION);
 
     evaluateWithGroq.mockClear();
     const blocked = await agent.post('/api/evaluate').send(body({ jobName: 'One too many' }));
@@ -177,7 +182,7 @@ describe('POST /api/evaluate under the daily cap', () => {
   it('still allows a visitor who is under the cap', async () => {
     const agent = visitor(app);
     const sessionId = await startSession(agent);
-    seedJobs(sessionId, DAILY_EVALUATIONS_PER_SESSION - 1);
+    await seedJobs(sessionId, DAILY_EVALUATIONS_PER_SESSION - 1);
 
     const res = await agent.post('/api/evaluate').send(body());
 
@@ -188,14 +193,14 @@ describe('POST /api/evaluate under the daily cap', () => {
   it('saves nothing when a request is capped', async () => {
     const agent = visitor(app);
     const sessionId = await startSession(agent);
-    seedJobs(sessionId, DAILY_EVALUATIONS_PER_SESSION);
+    await seedJobs(sessionId, DAILY_EVALUATIONS_PER_SESSION);
 
-    const before = getDb().prepare('SELECT COUNT(*) AS n FROM resumes').get() as { n: number };
+    const before = await rows('resumes');
     await agent.post('/api/evaluate').send(body({ jobName: 'Blocked' }));
-    const after = getDb().prepare('SELECT COUNT(*) AS n FROM resumes').get() as { n: number };
+    const after = await rows('resumes');
 
     // resolveResume writes a resume row, so the cap has to run before it.
-    expect(after.n).toBe(before.n);
+    expect(after).toBe(before);
   });
 });
 

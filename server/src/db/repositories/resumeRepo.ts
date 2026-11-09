@@ -1,5 +1,6 @@
 import type { Resume } from '@app/shared';
 import type { Db } from '../db.js';
+import { count, get, run } from '../sql.js';
 
 type ResumeRow = {
   id: number;
@@ -20,22 +21,27 @@ function toResume(row: ResumeRow): Resume {
   };
 }
 
-export function getDefaultResume(db: Db, sessionId: string): Resume | undefined {
-  const row = db
-    .prepare(
-      `SELECT * FROM resumes
-       WHERE is_default = 1 AND session_id = ?
-       ORDER BY updated_at DESC LIMIT 1`,
-    )
-    .get(sessionId) as ResumeRow | undefined;
+export async function getDefaultResume(db: Db, sessionId: string): Promise<Resume | undefined> {
+  const row = await get<ResumeRow>(
+    db,
+    `SELECT * FROM resumes
+     WHERE is_default = 1 AND session_id = ?
+     ORDER BY updated_at DESC LIMIT 1`,
+    [sessionId],
+  );
   return row ? toResume(row) : undefined;
 }
 
 /** Scoped, so one visitor cannot evaluate against another visitor's resume id. */
-export function getResumeById(db: Db, sessionId: string, id: number): Resume | undefined {
-  const row = db
-    .prepare('SELECT * FROM resumes WHERE id = ? AND session_id = ?')
-    .get(id, sessionId) as ResumeRow | undefined;
+export async function getResumeById(
+  db: Db,
+  sessionId: string,
+  id: number,
+): Promise<Resume | undefined> {
+  const row = await get<ResumeRow>(db, 'SELECT * FROM resumes WHERE id = ? AND session_id = ?', [
+    id,
+    sessionId,
+  ]);
   return row ? toResume(row) : undefined;
 }
 
@@ -51,38 +57,38 @@ export type NewResume = {
  * this one the default just clears the flag everywhere else — in one
  * transaction, so there is never zero or two defaults (SPEC.md section 4).
  */
-export function insertResume(db: Db, input: NewResume): Resume {
+export async function insertResume(db: Db, input: NewResume): Promise<Resume> {
   const updatedAt = new Date().toISOString();
 
-  const run = db.transaction((): number => {
+  const tx = await db.transaction('write');
+  try {
     if (input.setDefault) {
       // Only this visitor's default is cleared — never everyone's.
-      db.prepare('UPDATE resumes SET is_default = 0 WHERE session_id = ?').run(input.sessionId);
+      await run(tx, 'UPDATE resumes SET is_default = 0 WHERE session_id = ?', [input.sessionId]);
     }
-    const info = db
-      .prepare(
-        `INSERT INTO resumes (label, content, is_default, updated_at, session_id)
-         VALUES (?, ?, ?, ?, ?)`,
-      )
-      .run(input.label, input.content, input.setDefault ? 1 : 0, updatedAt, input.sessionId);
-    return Number(info.lastInsertRowid);
-  });
+    const inserted = await run(
+      tx,
+      `INSERT INTO resumes (label, content, is_default, updated_at, session_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      [input.label, input.content, input.setDefault ? 1 : 0, updatedAt, input.sessionId],
+    );
+    await tx.commit();
 
-  const id = run();
-  return {
-    id,
-    label: input.label,
-    content: input.content,
-    isDefault: input.setDefault,
-    updatedAt,
-  };
+    return {
+      id: inserted.lastInsertRowid,
+      label: input.label,
+      content: input.content,
+      isDefault: input.setDefault,
+      updatedAt,
+    };
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
 }
 
-export function countResumes(db: Db, sessionId?: string): number {
-  const row = (
-    sessionId === undefined
-      ? db.prepare('SELECT COUNT(*) AS n FROM resumes').get()
-      : db.prepare('SELECT COUNT(*) AS n FROM resumes WHERE session_id = ?').get(sessionId)
-  ) as { n: number };
-  return row.n;
+export async function countResumes(db: Db, sessionId?: string): Promise<number> {
+  return sessionId === undefined
+    ? count(db, 'SELECT COUNT(*) AS n FROM resumes')
+    : count(db, 'SELECT COUNT(*) AS n FROM resumes WHERE session_id = ?', [sessionId]);
 }

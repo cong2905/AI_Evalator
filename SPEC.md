@@ -29,7 +29,7 @@ A local web app that compares **my resume** against a **job description** using 
 | Language | TypeScript everywhere, `strict: true` |
 | Frontend | React 18 + Vite, plain CSS modules (no UI kit) |
 | Backend | Node 20+, Express |
-| Database | SQLite via `better-sqlite3`, file at `server/data/app.db` (gitignored) |
+| Database | SQLite via `@libsql/client`: a local file at `server/data/app.db` (gitignored), or hosted libSQL when `TURSO_DATABASE_URL` is set |
 | Validation | `zod` (shared request/response types) |
 | File upload | `multer` (memory storage, 5 MB max) |
 | Resume parsing | `pdf-parse` for PDF, `mammoth` for DOCX |

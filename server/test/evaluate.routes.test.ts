@@ -11,6 +11,7 @@ const { createApp } = await import('../src/app.js');
 const { closeDb, getDb } = await import('../src/db/db.js');
 const { countResumes, getDefaultResume } = await import('../src/db/repositories/resumeRepo.js');
 const { startSession, visitor } = await import('./helpers/session.js');
+const { many, one, rows } = await import('./helpers/db.js');
 type Agent = import('./helpers/session.js').Agent;
 
 // A fresh app per test: express-rate-limit holds its counters in memory, so a
@@ -81,7 +82,7 @@ const body = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(async () => {
-  closeDb();
+  await closeDb();
   evaluateWithGroq.mockReset();
   vi.spyOn(console, 'log').mockImplementation(() => {});
   app = createApp();
@@ -145,19 +146,19 @@ describe('POST /api/evaluate', () => {
 
     const res = await agent.post('/api/evaluate').send(body());
 
-    const db = getDb();
-    const job = db.prepare('SELECT * FROM jobs WHERE id = ?').get(res.body.id) as {
+    const job = await one<{
       match_score: number;
       missing_keywords: string;
       resume_id: number;
-    };
-    const items = db
-      .prepare('SELECT * FROM job_items WHERE job_id = ? ORDER BY sort_order')
-      .all(res.body.id) as Array<{ requirement: string; sort_order: number }>;
+    }>('SELECT * FROM jobs WHERE id = ?', [res.body.id]);
+    const items = await many<{ requirement: string; sort_order: number }>(
+      'SELECT * FROM job_items WHERE job_id = ? ORDER BY sort_order',
+      [res.body.id],
+    );
 
-    expect(job.match_score).toBe(75);
-    expect(JSON.parse(job.missing_keywords)).toEqual(['Playwright', 'design systems']);
-    expect(job.resume_id).toBeGreaterThan(0);
+    expect(job?.match_score).toBe(75);
+    expect(JSON.parse(job?.missing_keywords ?? 'null')).toEqual(['Playwright', 'design systems']);
+    expect(job?.resume_id).toBeGreaterThan(0);
     // Stored in job-description order; the must-first sort happens on read.
     expect(items.map((i) => i.sort_order)).toEqual([0, 1, 2, 3, 4]);
     expect(items[0]?.requirement).toBe('3+ years React');
@@ -170,9 +171,9 @@ describe('which resume gets used', () => {
 
     await agent.post('/api/evaluate').send(body());
 
-    const db = getDb();
-    expect(countResumes(db, sessionId)).toBe(1);
-    expect(getDefaultResume(db, sessionId)).toBeUndefined();
+    const db = await getDb();
+    expect(await countResumes(db, sessionId)).toBe(1);
+    expect(await getDefaultResume(db, sessionId)).toBeUndefined();
   });
 
   it('falls back to the saved default', async () => {
@@ -185,7 +186,7 @@ describe('which resume gets used', () => {
 
     expect(res.status).toBe(201);
     expect(res.body.resumeLabel).toBe('my-resume.pdf');
-    expect(countResumes(getDb(), sessionId)).toBe(1);
+    expect(await countResumes(await getDb(), sessionId)).toBe(1);
   });
 
   it('uses an explicit resumeId', async () => {
@@ -259,10 +260,8 @@ describe('input validation', () => {
   it('saves nothing when validation fails', async () => {
     await agent.post('/api/evaluate').send(body({ jdText: 'short' }));
 
-    const db = getDb();
-    const jobs = db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number };
-    expect(jobs.n).toBe(0);
-    expect(countResumes(db, sessionId)).toBe(0);
+    expect(await rows('jobs')).toBe(0);
+    expect(await countResumes(await getDb(), sessionId)).toBe(0);
   });
 });
 
@@ -274,8 +273,7 @@ describe('model trouble', () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error.code).toBe('AI_BAD_OUTPUT');
-    const jobs = getDb().prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number };
-    expect(jobs.n).toBe(0);
+    expect(await rows('jobs')).toBe(0);
   });
 
   it('passes a rate limit through with retryAfter and the Retry-After header', async () => {

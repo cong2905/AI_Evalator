@@ -2,6 +2,7 @@ import rateLimit, { type RateLimitRequestHandler } from 'express-rate-limit';
 import type { ApiErrorBody } from '@app/shared';
 import { ApiError } from './errors.js';
 import type { Db } from './db/db.js';
+import { count } from './db/sql.js';
 
 /**
  * Three layers stand between a public URL and an empty Groq quota
@@ -78,15 +79,13 @@ export function adoptRateLimiter(): RateLimitRequestHandler {
   });
 }
 
-function countSince(db: Db, isoSince: string, sessionId?: string): number {
-  const row = (
-    sessionId === undefined
-      ? db.prepare('SELECT COUNT(*) AS n FROM jobs WHERE created_at >= ?').get(isoSince)
-      : db
-          .prepare('SELECT COUNT(*) AS n FROM jobs WHERE created_at >= ? AND session_id = ?')
-          .get(isoSince, sessionId)
-  ) as { n: number };
-  return row.n;
+async function countSince(db: Db, isoSince: string, sessionId?: string): Promise<number> {
+  return sessionId === undefined
+    ? count(db, 'SELECT COUNT(*) AS n FROM jobs WHERE created_at >= ?', [isoSince])
+    : count(db, 'SELECT COUNT(*) AS n FROM jobs WHERE created_at >= ? AND session_id = ?', [
+        isoSince,
+        sessionId,
+      ]);
 }
 
 /** Start of the current UTC day, the window both daily caps count over. */
@@ -101,11 +100,15 @@ function startOfDayIso(now = new Date()): string {
  * the day's evaluations. Counted from saved jobs, so there is no extra table to
  * keep in sync — a failed evaluation saves nothing and therefore costs nothing.
  */
-export function assertDailyBudget(db: Db, sessionId: string, now = new Date()): void {
+export async function assertDailyBudget(
+  db: Db,
+  sessionId: string,
+  now = new Date(),
+): Promise<void> {
   const since = startOfDayIso(now);
   const retryAfter = secondsUntilReset(now);
 
-  if (countSince(db, since, sessionId) >= DAILY_EVALUATIONS_PER_SESSION) {
+  if ((await countSince(db, since, sessionId)) >= DAILY_EVALUATIONS_PER_SESSION) {
     throw new ApiError(
       'RATE_LIMITED',
       `This demo allows ${DAILY_EVALUATIONS_PER_SESSION} evaluations per visitor per day. ` +
@@ -114,7 +117,7 @@ export function assertDailyBudget(db: Db, sessionId: string, now = new Date()): 
     );
   }
 
-  if (countSince(db, since) >= DAILY_EVALUATIONS_GLOBAL) {
+  if ((await countSince(db, since)) >= DAILY_EVALUATIONS_GLOBAL) {
     throw new ApiError(
       'RATE_LIMITED',
       'The demo has hit its daily limit on AI requests. Try again tomorrow.',

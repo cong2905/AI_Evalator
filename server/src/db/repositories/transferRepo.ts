@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { Db } from '../db.js';
+import { count, get, run } from '../sql.js';
 
 /** Crockford base32: no I, L, O or U, so the code cannot be misread aloud. */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -35,18 +36,20 @@ function hash(normalized: string): string {
 
 export type NewTransferCode = { code: string; expiresAt: string };
 
-export function createTransferCode(
+export async function createTransferCode(
   db: Db,
   sessionId: string,
   now = new Date(),
-): NewTransferCode {
+): Promise<NewTransferCode> {
   const code = generateCode();
   const expiresAt = new Date(now.getTime() + TRANSFER_CODE_TTL_MS).toISOString();
 
-  db.prepare(
+  await run(
+    db,
     `INSERT INTO transfer_codes (code_hash, session_id, created_at, expires_at)
      VALUES (?, ?, ?, ?)`,
-  ).run(hash(normalizeCode(code)), sessionId, now.toISOString(), expiresAt);
+    [hash(normalizeCode(code)), sessionId, now.toISOString(), expiresAt],
+  );
 
   return { code, expiresAt };
 }
@@ -56,28 +59,39 @@ export function createTransferCode(
  * it is unknown, already used, or past its ten minutes. The caller must not
  * distinguish those cases to the client.
  */
-export function redeemTransferCode(db: Db, input: string, now = new Date()): string | undefined {
-  const row = db
-    .prepare('SELECT session_id, expires_at, used_at FROM transfer_codes WHERE code_hash = ?')
-    .get(hash(normalizeCode(input))) as
-    | { session_id: string; expires_at: string; used_at: string | null }
-    | undefined;
+export async function redeemTransferCode(
+  db: Db,
+  input: string,
+  now = new Date(),
+): Promise<string | undefined> {
+  const codeHash = hash(normalizeCode(input));
+
+  const row = await get<{ session_id: string; expires_at: string; used_at: string | null }>(
+    db,
+    'SELECT session_id, expires_at, used_at FROM transfer_codes WHERE code_hash = ?',
+    [codeHash],
+  );
 
   if (!row || row.used_at !== null || row.expires_at <= now.toISOString()) {
     return undefined;
   }
 
-  db.prepare('UPDATE transfer_codes SET used_at = ? WHERE code_hash = ?').run(
-    now.toISOString(),
-    hash(normalizeCode(input)),
+  // Conditional on used_at so that two devices racing the same code cannot both
+  // win: whichever UPDATE lands second changes nothing and is refused.
+  const burned = await run(
+    db,
+    'UPDATE transfer_codes SET used_at = ? WHERE code_hash = ? AND used_at IS NULL',
+    [now.toISOString(), codeHash],
   );
+  if (burned.changes === 0) return undefined;
 
   return row.session_id;
 }
 
-export function countLiveCodes(db: Db, now = new Date()): number {
-  const row = db
-    .prepare('SELECT COUNT(*) AS n FROM transfer_codes WHERE used_at IS NULL AND expires_at > ?')
-    .get(now.toISOString()) as { n: number };
-  return row.n;
+export async function countLiveCodes(db: Db, now = new Date()): Promise<number> {
+  return count(
+    db,
+    'SELECT COUNT(*) AS n FROM transfer_codes WHERE used_at IS NULL AND expires_at > ?',
+    [now.toISOString()],
+  );
 }

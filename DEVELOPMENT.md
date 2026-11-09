@@ -64,7 +64,7 @@ Errors always come back as `{ "error": { "code", "message", "retryAfter?" } }`.
 
 ```
 client/   React 18 + Vite — pages, components, api.ts
-server/   Express, SQLite (better-sqlite3), Groq integration
+server/   Express, SQLite over libSQL (@libsql/client), Groq integration
 shared/   DTOs both sides import as @app/shared
 ```
 
@@ -91,60 +91,74 @@ node server/test/fixtures/make-fixtures.mjs
 
 ## Deploying
 
-The app ships as one container: Express serves both the API and the built client on a single port.
-It needs a **persistent disk** for the SQLite file, which rules out free tiers that only offer
-ephemeral storage — Render's free web services, for instance, have no disk and wipe local files on
-every spin-down. The setup below uses an Oracle Cloud Always Free VM, which provides a real disk at
-no cost.
+The app ships as one process: Express serves both the API and the built client on a single port.
+Where the **database** goes is the only real decision, because SQLite is a file and most free hosts
+have no persistent disk.
 
-### Oracle Cloud Always Free
+The app reads whichever is configured:
 
-Everything needed is in `deploy/`. On a fresh Ubuntu VM:
+| Configuration | Database | Use for |
+|---|---|---|
+| neither variable set | `server/data/app.db` on local disk | local development |
+| `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | hosted libSQL, over the network | any host with no persistent disk |
+| `DB_PATH` on a mounted volume | SQLite on that volume | a host that gives you a real disk |
 
-```bash
-git clone https://github.com/cong2905/AI_Evalator.git
-cd AI_Evalator
-bash deploy/setup-vm.sh          # docker, swap if needed, host firewall
-cp deploy/.env.example deploy/.env
-nano deploy/.env                 # GROQ_API_KEY, SESSION_SECRET, SITE_DOMAIN, ACME_EMAIL
-cd deploy && docker compose up -d --build
-docker compose logs -f app       # expect: database ready / serving client / listening
-```
+Nothing in the app code branches on this: libSQL speaks the same SQL and the same client API to a
+local file and to a remote database, so the only difference is the connection string.
 
-Two prerequisites are easy to miss, and each fails silently:
+### Render free tier + Turso (current host)
 
-1. **Both firewalls must allow 80 and 443.** `setup-vm.sh` opens the host's iptables rules, but the
-   OCI console has a *separate* Security List that blocks them by default
-   (Networking → Virtual Cloud Networks → your VCN → Security Lists → default → add ingress rules
-   for TCP 80 and 443 from `0.0.0.0/0`). Open only one and the site is unreachable with nothing in
-   the logs to explain it.
-2. **You need a hostname, not just the IP.** Caddy cannot issue a TLS certificate for a bare IP
-   address, and without HTTPS the `Secure` session cookie is dropped by every browser — the site
-   would look like it works while losing every visitor's session on every request. A free DuckDNS
-   subdomain pointed at the VM's public IP is enough.
+Render's free web services cannot attach a disk and wipe local files on every spin-down, so the
+database lives on Turso and survives both. `render.yaml` describes the service.
 
-Updating after a push:
+First create the database (once, on your own machine):
 
 ```bash
-git pull && cd deploy && docker compose up -d --build
+npm i -g @tursodatabase/turso-cli   # or: brew install tursodatabase/tap/turso
+turso auth signup
+turso db create ai-job-evaluator
+turso db show ai-job-evaluator --url        # -> TURSO_DATABASE_URL
+turso db tokens create ai-job-evaluator     # -> TURSO_AUTH_TOKEN
 ```
 
-The database lives in the `app-data` Docker volume, so it survives restarts and rebuilds.
-`docker compose down` keeps it; `docker compose down -v` destroys it.
+Then on Render: **New → Blueprint**, point it at this repository, and supply `GROQ_API_KEY`,
+`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN`. `SESSION_SECRET` is generated for you and then left
+alone — see the warning below about rotating it.
 
-### Fly.io (previous host)
+Migrations run at startup against whatever database is configured, so the first boot creates the
+schema on Turso. Nothing has to be applied by hand.
 
-`Dockerfile` and `fly.toml` remain correct. Fly's trial ends and then requires a card; with one
-added, `fly deploy` restores the same app on a managed volume with no VM to maintain.
+Two things about the free tier that are not bugs:
+
+1. **The service sleeps after 15 minutes of no traffic** and takes roughly a minute to answer the
+   next request. The data is unaffected — it is on Turso, not on the sleeping instance.
+2. **A restart loses nothing**, which is the whole reason for Turso. Verify it by redeploying and
+   checking that a saved evaluation is still listed.
+
+### Oracle Cloud Always Free (a VM, if you want one)
+
+Everything needed is in `deploy/`: `setup-vm.sh`, a Docker Compose file and a Caddy TLS proxy. This
+path keeps SQLite on a real disk and has no cold start, at the cost of running a Linux box. Two
+prerequisites fail silently: the **OCI Security List** is a second firewall that must also allow
+TCP 80 and 443, and Caddy needs a **real hostname** (a free DuckDNS subdomain will do) because it
+cannot issue a certificate for a bare IP — and without HTTPS the `Secure` session cookie is dropped
+by every browser, so the site appears to work while losing every session.
+
+### Fly.io
+
+`Dockerfile` and `fly.toml` remain correct and use a mounted volume rather than Turso. Fly bills
+pay-as-you-go after the trial, but waives personal bills under $5/month, which this app sits well
+inside with `min_machines_running = 0`.
 
 ### Two constraints that will bite on any host
 
 1. **Never rotate `SESSION_SECRET` casually.** Every visitor cookie is signed with it. Changing it
    invalidates all of them at once: every session resets and every saved row is orphaned. Set it
    once, and never generate it in a build step.
-2. **Stay on a single machine.** The SQLite file lives on one volume attached to one machine. A
-   second machine gets its own empty volume and would serve an empty app to anyone routed there.
-   `fly scale count 1` is the only safe setting until the database moves to Postgres or Turso.
+2. **One machine per *volume*.** With `DB_PATH` on a mounted disk, a second machine gets its own
+   empty volume and would serve an empty app to anyone routed there — keep the count at 1. This
+   does not apply when the database is on Turso, which is reached over the network and shared
+   correctly by any number of instances.
 
 ### Testing the production build locally
 
@@ -152,6 +166,10 @@ added, `fly deploy` restores the same app on a managed volume with no VM to main
 npm run build -w client
 NODE_ENV=production PORT=3100 DB_PATH=./tmp.db npx tsx server/src/index.ts
 ```
+
+To rehearse the deployed setup instead, point the same command at Turso by setting
+`TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` rather than `DB_PATH`. Use a throwaway database: it
+runs the real migrations.
 
 `NODE_ENV=production` marks the session cookie `Secure`, so a browser will refuse to store it over
 plain `http://localhost`. The pages and the API work, but sessions won't persist until the app is

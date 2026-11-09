@@ -7,9 +7,10 @@ const evaluateWithGroq = vi.hoisted(() => vi.fn());
 vi.mock('../src/services/groqClient.js', () => ({ evaluateWithGroq }));
 
 const { createApp } = await import('../src/app.js');
-const { closeDb, getDb } = await import('../src/db/db.js');
+const { closeDb } = await import('../src/db/db.js');
 const { SESSION_COOKIE, SESSION_MAX_AGE_MS } = await import('../src/sessions.js');
 const { visitor } = await import('./helpers/session.js');
+const { exec, many } = await import('./helpers/db.js');
 
 // A fresh app per test: express-rate-limit holds its counters in memory, so a
 // shared instance would carry one test's requests into the next.
@@ -41,8 +42,8 @@ const evaluateBody = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-beforeEach(() => {
-  closeDb();
+beforeEach(async () => {
+  await closeDb();
   evaluateWithGroq.mockReset();
   evaluateWithGroq.mockResolvedValue({ payload: PAYLOAD, model: 'openai/gpt-oss-120b' });
   vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -218,9 +219,9 @@ describe('two visitors', () => {
     await alice.post('/api/resume').send({ text: RESUME_A });
     await bob.post('/api/resume').send({ text: RESUME_B });
 
-    const sessions = getDb()
-      .prepare('SELECT DISTINCT session_id FROM resumes')
-      .all() as Array<{ session_id: string | null }>;
+    const sessions = await many<{ session_id: string | null }>(
+      'SELECT DISTINCT session_id FROM resumes',
+    );
 
     expect(sessions).toHaveLength(2);
     expect(sessions.every((row) => typeof row.session_id === 'string')).toBe(true);
@@ -233,7 +234,7 @@ describe('rows from before the session column existed', () => {
     await alice.post('/api/evaluate').send(evaluateBody({ resumeText: RESUME_A }));
 
     // Simulate a row written by the pre-v2 schema.
-    getDb().prepare('UPDATE jobs SET session_id = NULL').run();
+    await exec('UPDATE jobs SET session_id = NULL');
 
     expect((await alice.get('/api/jobs')).body).toEqual([]);
     expect((await visitor(app).get('/api/jobs')).body).toEqual([]);

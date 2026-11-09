@@ -50,9 +50,15 @@ export function sessionMiddleware(): RequestHandler {
     req.sessionId = isValidId(existing) ? existing : randomUUID();
 
     setSessionCookie(res, req.sessionId);
-    touchSession(getDb(), req.sessionId);
 
-    next();
+    // The database is async, so the visit is recorded before the routers run
+    // rather than alongside them — a route that reads `sessions` would
+    // otherwise race the write that creates the row. A failure here is a real
+    // failure (the database is unreachable), so it goes to the error handler
+    // instead of letting the request continue against a dead connection.
+    void getDb()
+      .then((db) => touchSession(db, req.sessionId))
+      .then(() => next(), next);
   };
 }
 

@@ -16,7 +16,29 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3001),
   /** Override for tests; ':memory:' keeps the database off disk. */
   DB_PATH: z.string().trim().min(1).optional(),
-});
+  /**
+   * Hosted libSQL (Turso). Set this and the app stops using a local file, which
+   * is what lets it run on a host whose disk is wiped on every restart. Takes
+   * precedence over DB_PATH.
+   */
+  TURSO_DATABASE_URL: z.string().trim().min(1).optional(),
+  TURSO_AUTH_TOKEN: z.string().trim().min(1).optional(),
+})
+  .superRefine((env, ctx) => {
+    if (!env.TURSO_DATABASE_URL) return;
+
+    const local = /^(file:|:memory:)/.test(env.TURSO_DATABASE_URL);
+    // A remote database without a token connects and then fails every query
+    // with an auth error, which looks like a database bug rather than a missing
+    // variable. Catch it at startup instead.
+    if (!local && !env.TURSO_AUTH_TOKEN) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['TURSO_AUTH_TOKEN'],
+        message: 'Required when TURSO_DATABASE_URL points at a hosted database.',
+      });
+    }
+  });
 
 export type Env = z.infer<typeof envSchema>;
 

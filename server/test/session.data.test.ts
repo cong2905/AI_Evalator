@@ -13,6 +13,7 @@ const { purgeExpiredData, purgeSession, RETENTION_DAYS } = await import('../src/
 const { touchSession, getLastSeen } = await import('../src/db/repositories/sessionRepo.js');
 const { insertResume } = await import('../src/db/repositories/resumeRepo.js');
 const { insertJob } = await import('../src/db/repositories/jobRepo.js');
+const { exec, many, rows } = await import('./helpers/db.js');
 
 let app: ReturnType<typeof createApp>;
 
@@ -43,21 +44,21 @@ const evaluateBody = (over: Record<string, unknown> = {}) => ({
 });
 
 /** Writes a job for a session with a chosen age in days. */
-function seedJob(sessionId: string, ageDays: number, name = 'Job'): number {
-  const db = getDb();
+async function seedJob(sessionId: string, ageDays: number, name = 'Job'): Promise<number> {
+  const db = await getDb();
   const at = new Date(Date.now() - ageDays * 24 * 60 * 60 * 1000).toISOString();
   // The visitor exists and was last seen just now unless a test says otherwise.
-  touchSession(db, sessionId);
+  await touchSession(db, sessionId);
 
-  const resume = insertResume(db, {
+  const resume = await insertResume(db, {
     label: 'r.pdf',
     content: 'content',
     setDefault: false,
     sessionId,
   });
-  db.prepare('UPDATE resumes SET updated_at = ? WHERE id = ?').run(at, resume.id);
+  await exec('UPDATE resumes SET updated_at = ? WHERE id = ?', [at, resume.id]);
 
-  const id = insertJob(db, {
+  const id = await insertJob(db, {
     sessionId,
     jobName: name,
     company: 'Acme',
@@ -71,12 +72,12 @@ function seedJob(sessionId: string, ageDays: number, name = 'Job'): number {
       { requirement: 'React', category: 'skill', importance: 'must', evidence: '', status: 'met' },
     ],
   });
-  db.prepare('UPDATE jobs SET created_at = ? WHERE id = ?').run(at, id);
+  await exec('UPDATE jobs SET created_at = ? WHERE id = ?', [at, id]);
   return id;
 }
 
-beforeEach(() => {
-  closeDb();
+beforeEach(async () => {
+  await closeDb();
   evaluateWithGroq.mockReset();
   evaluateWithGroq.mockResolvedValue({ payload: PAYLOAD, model: 'openai/gpt-oss-120b' });
   vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -100,10 +101,10 @@ describe('transfer codes', () => {
     const agent = visitor(app);
 
     const res = await agent.post('/api/session/transfer-code');
-    const rows = getDb().prepare('SELECT * FROM transfer_codes').all();
+    const stored = await many('SELECT * FROM transfer_codes');
 
-    expect(JSON.stringify(rows)).not.toContain(res.body.code.replace('-', ''));
-    expect(JSON.stringify(rows)).not.toContain(res.body.code);
+    expect(JSON.stringify(stored)).not.toContain(res.body.code.replace('-', ''));
+    expect(JSON.stringify(stored)).not.toContain(res.body.code);
   });
 
   it('moves a session to a second device, leaving both working', async () => {
@@ -146,15 +147,30 @@ describe('transfer codes', () => {
     expect(second.status).toBe(400);
   });
 
-  it('expires after ten minutes', () => {
-    const db = getDb();
-    const { code } = createTransferCode(db, 'alice');
+  it('expires after ten minutes', async () => {
+    const db = await getDb();
+    const { code } = await createTransferCode(db, 'alice');
 
     const elevenMinutes = new Date(Date.now() + 11 * 60 * 1000);
-    expect(redeemTransferCode(db, code, elevenMinutes)).toBeUndefined();
+    expect(await redeemTransferCode(db, code, elevenMinutes)).toBeUndefined();
 
     const nineMinutes = new Date(Date.now() + 9 * 60 * 1000);
-    expect(redeemTransferCode(db, code, nineMinutes)).toBe('alice');
+    expect(await redeemTransferCode(db, code, nineMinutes)).toBe('alice');
+  });
+
+  it('cannot be redeemed twice even by two devices racing it', async () => {
+    const db = await getDb();
+    const { code } = await createTransferCode(db, 'alice');
+
+    // The driver is asynchronous now, so both reads can see the code unused
+    // before either write lands. Exactly one may win.
+    const [first, second] = await Promise.all([
+      redeemTransferCode(db, code),
+      redeemTransferCode(db, code),
+    ]);
+
+    expect([first, second].filter((r) => r === 'alice')).toHaveLength(1);
+    expect([first, second].filter((r) => r === undefined)).toHaveLength(1);
   });
 
   it('gives the same answer for unknown, used and expired codes', async () => {
@@ -189,10 +205,9 @@ describe('delete my data', () => {
     const res = await agent.delete('/api/session/data');
 
     expect(res.status).toBe(204);
-    const db = getDb();
-    expect((db.prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number }).n).toBe(0);
-    expect((db.prepare('SELECT COUNT(*) AS n FROM resumes').get() as { n: number }).n).toBe(0);
-    expect((db.prepare('SELECT COUNT(*) AS n FROM job_items').get() as { n: number }).n).toBe(0);
+    expect(await rows('jobs')).toBe(0);
+    expect(await rows('resumes')).toBe(0);
+    expect(await rows('job_items')).toBe(0);
   });
 
   it('leaves other visitors alone', async () => {
@@ -221,86 +236,84 @@ describe('delete my data', () => {
     const sessionId = await startSession(agent);
     await agent.post('/api/session/transfer-code');
 
-    purgeSession(getDb(), sessionId);
+    await purgeSession(await getDb(), sessionId);
 
-    expect(countLiveCodes(getDb())).toBe(0);
+    expect(await countLiveCodes(await getDb())).toBe(0);
   });
 });
 
 describe('the retention purge', () => {
   /** Backdates a visitor's last visit. */
-  function lastSeenDaysAgo(sessionId: string, days: number): void {
+  async function lastSeenDaysAgo(sessionId: string, days: number): Promise<void> {
     const at = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
-    getDb().prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?').run(at, sessionId);
+    await exec('UPDATE sessions SET last_seen_at = ? WHERE id = ?', [at, sessionId]);
   }
 
-  it('keeps an active visitor’s data however old it is', () => {
-    seedJob('alice', 90, 'Three months old');
-    lastSeenDaysAgo('alice', 0);
+  it('keeps an active visitor’s data however old it is', async () => {
+    await seedJob('alice', 90, 'Three months old');
+    await lastSeenDaysAgo('alice', 0);
 
-    const removed = purgeExpiredData(getDb());
+    const removed = await purgeExpiredData(await getDb());
 
     expect(removed.jobs).toBe(0);
-    const left = getDb().prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number };
-    expect(left.n).toBe(1);
+    expect(await rows('jobs')).toBe(1);
   });
 
-  it('keeps data for a visitor who came back on day six', () => {
-    seedJob('alice', 30, 'Old job');
-    lastSeenDaysAgo('alice', RETENTION_DAYS - 1);
+  it('keeps data for a visitor who came back on day six', async () => {
+    await seedJob('alice', 30, 'Old job');
+    await lastSeenDaysAgo('alice', RETENTION_DAYS - 1);
 
-    purgeExpiredData(getDb());
+    await purgeExpiredData(await getDb());
 
-    const left = getDb().prepare('SELECT COUNT(*) AS n FROM jobs').get() as { n: number };
-    expect(left.n).toBe(1);
+    expect(await rows('jobs')).toBe(1);
   });
 
-  it('removes everything for a visitor gone longer than the window', () => {
-    seedJob('alice', 1, 'Yesterday');
-    lastSeenDaysAgo('alice', RETENTION_DAYS + 1);
+  it('removes everything for a visitor gone longer than the window', async () => {
+    await seedJob('alice', 1, 'Yesterday');
+    await lastSeenDaysAgo('alice', RETENTION_DAYS + 1);
 
-    const removed = purgeExpiredData(getDb());
+    const removed = await purgeExpiredData(await getDb());
 
     expect(removed.jobs).toBe(1);
     expect(removed.resumes).toBe(1);
     expect(removed.sessions).toBe(1);
   });
 
-  it('judges each visitor separately', () => {
-    seedJob('active', 20, 'Kept');
-    seedJob('gone', 1, 'Dropped');
-    lastSeenDaysAgo('gone', RETENTION_DAYS + 2);
+  it('judges each visitor separately', async () => {
+    await seedJob('active', 20, 'Kept');
+    await seedJob('gone', 1, 'Dropped');
+    await lastSeenDaysAgo('gone', RETENTION_DAYS + 2);
 
-    purgeExpiredData(getDb());
+    await purgeExpiredData(await getDb());
 
-    const names = getDb().prepare('SELECT job_name FROM jobs').all() as Array<{ job_name: string }>;
+    const names = await many<{ job_name: string }>('SELECT job_name FROM jobs');
     expect(names.map((r) => r.job_name)).toEqual(['Kept']);
   });
 
-  it('removes rows orphaned by a cleared cookie', () => {
-    seedJob('alice', 1, 'Fresh but orphaned');
-    getDb().prepare('UPDATE jobs SET session_id = NULL').run();
-    getDb().prepare('UPDATE resumes SET session_id = NULL').run();
+  it('removes rows orphaned by a cleared cookie', async () => {
+    await seedJob('alice', 1, 'Fresh but orphaned');
+    await exec('UPDATE jobs SET session_id = NULL');
+    await exec('UPDATE resumes SET session_id = NULL');
 
-    const removed = purgeExpiredData(getDb());
+    const removed = await purgeExpiredData(await getDb());
 
     expect(removed.jobs).toBe(1);
     expect(removed.resumes).toBe(1);
   });
 
-  it('never deletes a resume a surviving job still points at', () => {
-    const db = getDb();
-    touchSession(db, 'alice');
-    const resume = insertResume(db, {
+  it('never deletes a resume a surviving job still points at', async () => {
+    const db = await getDb();
+    await touchSession(db, 'alice');
+    const resume = await insertResume(db, {
       label: 'old.pdf',
       content: 'content',
       setDefault: false,
       sessionId: 'alice',
     });
     const old = new Date(Date.now() - 400 * 86_400_000).toISOString();
-    db.prepare('UPDATE resumes SET updated_at = ? WHERE id = ?').run(old, resume.id);
+    await exec('UPDATE resumes SET updated_at = ? WHERE id = ?', [old, resume.id]);
 
-    insertJob(db, {
+    await insertJob(db, {
       sessionId: 'alice',
       jobName: 'Recent job',
       company: 'Acme',
@@ -315,31 +328,41 @@ describe('the retention purge', () => {
       ],
     });
 
-    expect(() => purgeExpiredData(db)).not.toThrow();
+    await expect(purgeExpiredData(db)).resolves.toBeDefined();
 
-    const left = db.prepare('SELECT COUNT(*) AS n FROM resumes').get() as { n: number };
-    expect(left.n).toBe(1);
+    expect(await rows('resumes')).toBe(1);
   });
 
-  it('clears used and expired transfer codes', () => {
-    const db = getDb();
-    const { code } = createTransferCode(db, 'alice');
-    redeemTransferCode(db, code);
-    createTransferCode(db, 'bob', new Date(Date.now() - 60 * 60 * 1000));
+  it('clears used and expired transfer codes', async () => {
+    const db = await getDb();
+    const { code } = await createTransferCode(db, 'alice');
+    await redeemTransferCode(db, code);
+    await createTransferCode(db, 'bob', new Date(Date.now() - 60 * 60 * 1000));
 
-    const removed = purgeExpiredData(db);
+    const removed = await purgeExpiredData(db);
 
     expect(removed.codes).toBe(2);
   });
 
-  it('removes a job’s items with it', () => {
-    seedJob('alice', 1, 'Old');
-    lastSeenDaysAgo('alice', RETENTION_DAYS + 2);
+  it('removes a job’s items with it', async () => {
+    await seedJob('alice', 1, 'Old');
+    await lastSeenDaysAgo('alice', RETENTION_DAYS + 2);
 
-    purgeExpiredData(getDb());
+    await purgeExpiredData(await getDb());
 
-    const items = getDb().prepare('SELECT COUNT(*) AS n FROM job_items').get() as { n: number };
-    expect(items.n).toBe(0);
+    expect(await rows('job_items')).toBe(0);
+  });
+
+  it('removes a job’s items even where cascade is not enforced', async () => {
+    await seedJob('alice', 1, 'Old');
+    await lastSeenDaysAgo('alice', RETENTION_DAYS + 2);
+    // A hosted database may not honour the per-connection foreign key pragma,
+    // which would leave job_items behind forever if the purge relied on it.
+    await exec('PRAGMA foreign_keys = OFF');
+
+    await purgeExpiredData(await getDb());
+
+    expect(await rows('job_items')).toBe(0);
   });
 });
 
@@ -348,7 +371,7 @@ describe('session activity', () => {
     const agent = visitor(app);
     const sessionId = await startSession(agent);
 
-    expect(getLastSeen(getDb(), sessionId)).toBeDefined();
+    expect(await getLastSeen(await getDb(), sessionId)).toBeDefined();
   });
 
   it('rolls the cookie forward on a return visit', async () => {
@@ -368,31 +391,30 @@ describe('session activity', () => {
     const agent = visitor(app);
     const first = await startSession(agent);
     await agent.get('/api/health');
-    const stillThere = getLastSeen(getDb(), first);
+    const stillThere = await getLastSeen(await getDb(), first);
 
     expect(stillThere).toBeDefined();
-    const rows = getDb().prepare('SELECT COUNT(*) AS n FROM sessions').get() as { n: number };
-    expect(rows.n).toBe(1);
+    expect(await rows('sessions')).toBe(1);
   });
 
-  it('does not write on every single request', () => {
-    const db = getDb();
-    touchSession(db, 'alice');
-    const first = getLastSeen(db, 'alice');
+  it('does not write on every single request', async () => {
+    const db = await getDb();
+    await touchSession(db, 'alice');
+    const first = await getLastSeen(db, 'alice');
 
-    touchSession(db, 'alice', new Date(Date.now() + 60_000));
+    await touchSession(db, 'alice', new Date(Date.now() + 60_000));
 
-    // A minute later is not worth a disk write; retention counts in days.
-    expect(getLastSeen(db, 'alice')).toBe(first);
+    // A minute later is not worth a database write; retention counts in days.
+    expect(await getLastSeen(db, 'alice')).toBe(first);
   });
 
-  it('does write once the timestamp is properly stale', () => {
-    const db = getDb();
-    touchSession(db, 'alice');
-    const first = getLastSeen(db, 'alice');
+  it('does write once the timestamp is properly stale', async () => {
+    const db = await getDb();
+    await touchSession(db, 'alice');
+    const first = await getLastSeen(db, 'alice');
 
-    touchSession(db, 'alice', new Date(Date.now() + 2 * 60 * 60 * 1000));
+    await touchSession(db, 'alice', new Date(Date.now() + 2 * 60 * 60 * 1000));
 
-    expect(getLastSeen(db, 'alice')).not.toBe(first);
+    expect(await getLastSeen(db, 'alice')).not.toBe(first);
   });
 });

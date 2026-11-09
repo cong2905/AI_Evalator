@@ -42,3 +42,35 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ ...VALID, PORT: 'abc' })).toThrow(/PORT/);
   });
 });
+
+describe('the hosted database settings', () => {
+  it('refuses a remote database with no auth token', () => {
+    // Otherwise the app boots happily and every query fails with an auth error,
+    // which reads as a database fault rather than a missing variable.
+    expect(() =>
+      parseEnv({ ...VALID, TURSO_DATABASE_URL: 'libsql://db-example.turso.io' }),
+    ).toThrow(/TURSO_AUTH_TOKEN/);
+  });
+
+  it('accepts a remote database with a token', () => {
+    const env = parseEnv({
+      ...VALID,
+      TURSO_DATABASE_URL: 'libsql://db-example.turso.io',
+      TURSO_AUTH_TOKEN: 'token',
+    });
+
+    expect(env.TURSO_DATABASE_URL).toBe('libsql://db-example.turso.io');
+  });
+
+  it('does not ask for a token for a local libSQL url', () => {
+    expect(() => parseEnv({ ...VALID, TURSO_DATABASE_URL: 'file:./local.db' })).not.toThrow();
+    expect(() => parseEnv({ ...VALID, TURSO_DATABASE_URL: ':memory:' })).not.toThrow();
+  });
+
+  it('is entirely optional, so local development needs neither', () => {
+    const env = parseEnv(VALID);
+
+    expect(env.TURSO_DATABASE_URL).toBeUndefined();
+    expect(env.TURSO_AUTH_TOKEN).toBeUndefined();
+  });
+});

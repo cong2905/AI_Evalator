@@ -30,20 +30,23 @@ const singleFile = upload.single("file");
 
 export const resumeRouter: Router = Router();
 
-resumeRouter.get("/resume/default", (req, res) => {
-  const resume = getDefaultResume(getDb(), req.sessionId);
-  if (!resume) {
-    throw new ApiError("NOT_FOUND", "No default resume saved yet.");
-  }
+resumeRouter.get(
+  "/resume/default",
+  wrap(async (req, res) => {
+    const resume = await getDefaultResume(await getDb(), req.sessionId);
+    if (!resume) {
+      throw new ApiError("NOT_FOUND", "No default resume saved yet.");
+    }
 
-  const body: DefaultResume = {
-    id: resume.id,
-    label: resume.label,
-    content: resume.content,
-    updatedAt: resume.updatedAt,
-  };
-  res.json(body);
-});
+    const body: DefaultResume = {
+      id: resume.id,
+      label: resume.label,
+      content: resume.content,
+      updatedAt: resume.updatedAt,
+    };
+    res.json(body);
+  }),
+);
 
 resumeRouter.post(
   "/resume/parse",
@@ -93,7 +96,7 @@ resumeRouter.post(
     }
 
     const content = assertLength(text, "Resume text", LIMITS.resumeText);
-    const saved: Resume = insertResume(getDb(), {
+    const saved: Resume = await insertResume(await getDb(), {
       label: label.slice(0, 200),
       content,
       setDefault: body.setDefault,

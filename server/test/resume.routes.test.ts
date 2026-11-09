@@ -7,6 +7,7 @@ import { createApp } from '../src/app.js';
 import { startSession, visitor, type Agent } from './helpers/session.js';
 import { closeDb, getDb } from '../src/db/db.js';
 import { countResumes, getDefaultResume } from '../src/db/repositories/resumeRepo.js';
+import { rows } from './helpers/db.js';
 
 const app = createApp();
 const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -21,7 +22,7 @@ let sessionId: string;
 
 // Each test starts from an empty database and a fresh visitor cookie.
 beforeEach(async () => {
-  closeDb();
+  await closeDb();
   agent = visitor(app);
   sessionId = await startSession(agent);
 });
@@ -79,14 +80,11 @@ describe('POST /api/resume', () => {
     await agent.post('/api/resume').send({ text: RESUME, label: 'first' });
     await agent.post('/api/resume').send({ text: RESUME, label: 'second' });
 
-    const db = getDb();
-    const defaults = db.prepare('SELECT COUNT(*) AS n FROM resumes WHERE is_default = 1').get() as {
-      n: number;
-    };
+    const db = await getDb();
 
-    expect(defaults.n).toBe(1);
-    expect(countResumes(db, sessionId)).toBe(2);
-    expect(getDefaultResume(db, sessionId)?.label).toBe('second');
+    expect(await rows('resumes', 'is_default = 1')).toBe(1);
+    expect(await countResumes(db, sessionId)).toBe(2);
+    expect((await getDefaultResume(db, sessionId))?.label).toBe('second');
   });
 
   it('honours setDefault=false', async () => {
@@ -96,7 +94,7 @@ describe('POST /api/resume', () => {
       .send({ text: RESUME, label: 'scratch', setDefault: false });
 
     expect(res.body.isDefault).toBe(false);
-    expect(getDefaultResume(getDb(), sessionId)?.label).toBe('keeper');
+    expect((await getDefaultResume(await getDb(), sessionId))?.label).toBe('keeper');
   });
 
   it('rejects a resume under the 200 character floor', async () => {
@@ -130,7 +128,7 @@ describe('POST /api/resume', () => {
       .attach('file', path.join(fixtures, 'not-really.pdf'));
 
     expect(res.status).toBe(422);
-    expect(countResumes(getDb(), sessionId)).toBe(0);
+    expect(await countResumes(await getDb(), sessionId)).toBe(0);
   });
 });
 
@@ -140,7 +138,7 @@ describe('POST /api/resume/parse', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.text).toContain('Jane Doe');
-    expect(countResumes(getDb(), sessionId)).toBe(0);
+    expect(await countResumes(await getDb(), sessionId)).toBe(0);
   });
 
   it('requires a file', async () => {

@@ -1,5 +1,6 @@
 import type { JobDetail, JobItem, JobSummary } from '@app/shared';
 import type { Db } from '../db.js';
+import { all, get, run } from '../sql.js';
 
 type JobRow = {
   id: number;
@@ -64,17 +65,17 @@ const JOB_SQL = `
 `;
 
 /** The job row and all of its items are written in one transaction. */
-export function insertJob(db: Db, input: NewJob): number {
+export async function insertJob(db: Db, input: NewJob): Promise<number> {
   const createdAt = new Date().toISOString();
 
-  const run = db.transaction((): number => {
-    const info = db
-      .prepare(
-        `INSERT INTO jobs
-           (job_name, company, match_score, summary, missing_keywords, jd_text, resume_id, model, created_at, session_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+  const tx = await db.transaction('write');
+  try {
+    const inserted = await run(
+      tx,
+      `INSERT INTO jobs
+         (job_name, company, match_score, summary, missing_keywords, jd_text, resume_id, model, created_at, session_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
         input.jobName,
         input.company,
         input.matchScore,
@@ -85,31 +86,27 @@ export function insertJob(db: Db, input: NewJob): number {
         input.model,
         createdAt,
         input.sessionId,
-      );
-
-    const jobId = Number(info.lastInsertRowid);
-    const insertItem = db.prepare(
-      `INSERT INTO job_items
-         (job_id, requirement, category, importance, evidence, status, sort_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ],
     );
 
-    input.items.forEach((item, index) => {
-      insertItem.run(
-        jobId,
-        item.requirement,
-        item.category,
-        item.importance,
-        item.evidence,
-        item.status,
-        index,
+    const jobId = inserted.lastInsertRowid;
+
+    for (const [index, item] of input.items.entries()) {
+      await run(
+        tx,
+        `INSERT INTO job_items
+           (job_id, requirement, category, importance, evidence, status, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [jobId, item.requirement, item.category, item.importance, item.evidence, item.status, index],
       );
-    });
+    }
 
+    await tx.commit();
     return jobId;
-  });
-
-  return run();
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
 }
 
 function parseKeywords(raw: string): string[] {
@@ -122,27 +119,27 @@ function parseKeywords(raw: string): string[] {
 }
 
 /** Newest first; `q` matches job name or company, case-insensitively. */
-export function listJobs(db: Db, sessionId: string, q?: string): JobSummary[] {
+export async function listJobs(db: Db, sessionId: string, q?: string): Promise<JobSummary[]> {
   const term = q?.trim();
 
   const rows = term
-    ? (db
-        .prepare(
-          `SELECT id, job_name, company, match_score, created_at
-           FROM jobs
-           WHERE session_id = ?
-             AND (job_name LIKE ? ESCAPE '\\' OR company LIKE ? ESCAPE '\\')
-           ORDER BY created_at DESC, id DESC`,
-        )
-        .all(sessionId, likeTerm(term), likeTerm(term)) as SummaryRow[])
-    : (db
-        .prepare(
-          `SELECT id, job_name, company, match_score, created_at
-           FROM jobs
-           WHERE session_id = ?
-           ORDER BY created_at DESC, id DESC`,
-        )
-        .all(sessionId) as SummaryRow[]);
+    ? await all<SummaryRow>(
+        db,
+        `SELECT id, job_name, company, match_score, created_at
+         FROM jobs
+         WHERE session_id = ?
+           AND (job_name LIKE ? ESCAPE '\\' OR company LIKE ? ESCAPE '\\')
+         ORDER BY created_at DESC, id DESC`,
+        [sessionId, likeTerm(term), likeTerm(term)],
+      )
+    : await all<SummaryRow>(
+        db,
+        `SELECT id, job_name, company, match_score, created_at
+         FROM jobs
+         WHERE session_id = ?
+         ORDER BY created_at DESC, id DESC`,
+        [sessionId],
+      );
 
   return rows.map((row) => ({
     id: row.id,
@@ -158,16 +155,40 @@ function likeTerm(term: string): string {
   return `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
-/** job_items go with it through ON DELETE CASCADE. Returns false if it was already gone. */
-export function deleteJob(db: Db, sessionId: string, id: number): boolean {
-  return db.prepare('DELETE FROM jobs WHERE id = ? AND session_id = ?').run(id, sessionId).changes > 0;
+/**
+ * Returns false if it was already gone. The items are deleted explicitly rather
+ * than left to ON DELETE CASCADE, which depends on a per-connection pragma that
+ * a hosted database need not honour — a silent leak of orphaned rows.
+ */
+export async function deleteJob(db: Db, sessionId: string, id: number): Promise<boolean> {
+  const tx = await db.transaction('write');
+  try {
+    await run(
+      tx,
+      'DELETE FROM job_items WHERE job_id IN (SELECT id FROM jobs WHERE id = ? AND session_id = ?)',
+      [id, sessionId],
+    );
+    const removed = await run(tx, 'DELETE FROM jobs WHERE id = ? AND session_id = ?', [
+      id,
+      sessionId,
+    ]);
+    await tx.commit();
+    return removed.changes > 0;
+  } catch (err) {
+    await tx.rollback();
+    throw err;
+  }
 }
 
-export function getJobDetail(db: Db, sessionId: string, id: number): JobDetail | undefined {
-  const row = db.prepare(JOB_SQL).get(id, sessionId) as JobRow | undefined;
+export async function getJobDetail(
+  db: Db,
+  sessionId: string,
+  id: number,
+): Promise<JobDetail | undefined> {
+  const row = await get<JobRow>(db, JOB_SQL, [id, sessionId]);
   if (!row) return undefined;
 
-  const items = db.prepare(ITEMS_SQL).all(id) as ItemRow[];
+  const items = await all<ItemRow>(db, ITEMS_SQL, [id]);
 
   return {
     id: row.id,

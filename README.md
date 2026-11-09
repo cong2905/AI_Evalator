@@ -109,12 +109,12 @@ anything.
 | Routing | **React Router** | Switches between the Evaluate and Jobs pages without reloading |
 | Backend | **Node.js** + **Express** | A small API that handles uploads, evaluations, and saved jobs |
 | AI model | **Groq API** running `openai/gpt-oss-120b` | Very fast responses, which keeps an evaluation down to a few seconds |
-| Database | **SQLite** via `better-sqlite3` | A single file with no separate database server |
+| Database | **SQLite** via `@libsql/client` | One client that reads a local file in development and a hosted libSQL database in production, with no change to the queries |
 | File parsing | **pdf-parse**, **mammoth** | Pull the text out of PDF and Word files |
 | Validation | **Zod** | Checks every request and every AI response before it's used |
 | Protection | **express-rate-limit**, signed cookies | Limits per IP address, per visitor, and for the whole site |
 | Testing | **Vitest** | Server and component tests. The tests never call the real AI service |
-| Hosting | **Docker** on an **Oracle Cloud Always Free** VM, behind **Caddy** | One container serving the website and the API, with automatic HTTPS |
+| Hosting | **Render** free tier, with the database on **Turso** | One service serving the website and the API over HTTPS, with no server to maintain and nothing lost when it restarts |
 
 ### How it works
 
