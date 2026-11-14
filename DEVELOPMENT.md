@@ -92,8 +92,8 @@ node server/test/fixtures/make-fixtures.mjs
 ## Deploying
 
 The app ships as one process: Express serves both the API and the built client on a single port.
-Where the **database** goes is the only real decision, because SQLite is a file and most free hosts
-have no persistent disk.
+The production host is Render's free tier, which has no persistent disk, so the database lives on
+Turso (hosted libSQL).
 
 The app reads whichever is configured:
 
@@ -101,7 +101,6 @@ The app reads whichever is configured:
 |---|---|---|
 | neither variable set | `server/data/app.db` on local disk | local development |
 | `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` | hosted libSQL, over the network | any host with no persistent disk |
-| `DB_PATH` on a mounted volume | SQLite on that volume | a host that gives you a real disk |
 
 Nothing in the app code branches on this: libSQL speaks the same SQL and the same client API to a
 local file and to a remote database, so the only difference is the connection string.
@@ -135,30 +134,10 @@ Two things about the free tier that are not bugs:
 2. **A restart loses nothing**, which is the whole reason for Turso. Verify it by redeploying and
    checking that a saved evaluation is still listed.
 
-### Oracle Cloud Always Free (a VM, if you want one)
+### Never rotate `SESSION_SECRET` casually
 
-Everything needed is in `deploy/`: `setup-vm.sh`, a Docker Compose file and a Caddy TLS proxy. This
-path keeps SQLite on a real disk and has no cold start, at the cost of running a Linux box. Two
-prerequisites fail silently: the **OCI Security List** is a second firewall that must also allow
-TCP 80 and 443, and Caddy needs a **real hostname** (a free DuckDNS subdomain will do) because it
-cannot issue a certificate for a bare IP — and without HTTPS the `Secure` session cookie is dropped
-by every browser, so the site appears to work while losing every session.
-
-### Fly.io
-
-`Dockerfile` and `fly.toml` remain correct and use a mounted volume rather than Turso. Fly bills
-pay-as-you-go after the trial, but waives personal bills under $5/month, which this app sits well
-inside with `min_machines_running = 0`.
-
-### Two constraints that will bite on any host
-
-1. **Never rotate `SESSION_SECRET` casually.** Every visitor cookie is signed with it. Changing it
-   invalidates all of them at once: every session resets and every saved row is orphaned. Set it
-   once, and never generate it in a build step.
-2. **One machine per *volume*.** With `DB_PATH` on a mounted disk, a second machine gets its own
-   empty volume and would serve an empty app to anyone routed there — keep the count at 1. This
-   does not apply when the database is on Turso, which is reached over the network and shared
-   correctly by any number of instances.
+Every visitor cookie is signed with it. Changing it invalidates all of them at once: every session
+resets and every saved row is orphaned. Set it once, and never generate it in a build step.
 
 ### Testing the production build locally
 

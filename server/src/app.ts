@@ -17,7 +17,7 @@ export function createApp(): Express {
 
   app.disable('x-powered-by');
   app.use(helmet());
-  // Fly terminates TLS and forwards, so the real client IP is in X-Forwarded-For.
+  // Render terminates TLS and forwards, so the real client IP is in X-Forwarded-For.
   // Without this the rate limiter would see one proxy IP for every visitor.
   app.set('trust proxy', 1);
   app.use(express.json({ limit: '1mb' }));

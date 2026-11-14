@@ -3,7 +3,7 @@ import path from 'node:path';
 import express, { type Express } from 'express';
 import { SERVER_ROOT } from './env.js';
 
-/** Where `npm run build -w client` leaves the bundle, overridable for Docker. */
+/** Where `npm run build -w client` leaves the bundle, overridable via CLIENT_DIST. */
 function resolveClientDist(): string | undefined {
   const candidate =
     process.env.CLIENT_DIST ?? path.join(SERVER_ROOT, '..', 'client', 'dist');
